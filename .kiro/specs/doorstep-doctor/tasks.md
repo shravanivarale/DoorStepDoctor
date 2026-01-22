@@ -162,6 +162,80 @@ This implementation plan focuses specifically on integrating Firebase Authentica
 - [ ] 9. Final checkpoint - Ensure all authentication tests pass
   - Ensure all authentication tests pass, ask the user if questions arise.
 
+- [ ] 10. Real-Time Chat and Video Consultation Implementation
+  - [ ] 10.1 Backend Socket.IO Setup
+    - Install and configure Socket.IO server
+    - Create consultation socket handlers for real-time messaging
+    - Implement WebRTC signaling server for video calls
+    - Set up consultation room management
+    - _Requirements: 3.1, 3.2, 3.3, 3.4_
+
+  - [ ] 10.2 Backend Consultation API Endpoints
+    - Implement POST /api/consultations/request endpoint
+    - Create GET /api/consultations/active endpoint
+    - Build PUT /api/consultations/:id/accept endpoint
+    - Add GET /api/consultations/history endpoint
+    - Implement consultation status management
+    - _Requirements: 3.1, 3.2, 3.10_
+
+  - [ ] 10.3 Frontend Socket.IO Client Setup
+    - Install and configure Socket.IO client
+    - Create useSocket hook for connection management
+    - Implement consultation event handlers
+    - Set up real-time message synchronization
+    - _Requirements: 3.3, 3.4_
+
+  - [ ] 10.4 Chat Interface Implementation
+    - Build ChatInterface component for real-time messaging
+    - Implement message sending and receiving
+    - Add typing indicators and message status
+    - Create message history display
+    - Handle message persistence and offline sync
+    - _Requirements: 3.3, 3.4, 3.10_
+
+  - [ ] 10.5 WebRTC Video Call Implementation
+    - Install WebRTC dependencies (or Twilio SDK)
+    - Create VideoCall component with camera/microphone controls
+    - Implement peer-to-peer connection establishment
+    - Add call initiation, acceptance, and termination
+    - Handle connection quality and fallback to audio-only
+    - _Requirements: 3.5, 3.6, 3.7, 3.9_
+
+  - [ ] 10.6 Consultation Room Component
+    - Build ConsultationRoom component combining chat and video
+    - Implement consultation timer and duration tracking
+    - Add participant status indicators (online/offline)
+    - Create consultation controls (mute, camera, end call)
+    - Handle consultation state management
+    - _Requirements: 3.2, 3.7, 3.8_
+
+  - [ ] 10.7 Appointment Scheduling System
+    - Create appointment booking interface for patients
+    - Implement doctor availability management
+    - Build appointment confirmation and reminder system
+    - Add calendar integration for scheduling
+    - Handle appointment rescheduling and cancellation
+    - _Requirements: 11.1, 11.2, 11.3, 11.4_
+
+  - [ ] 10.8 Session History and Records
+    - Implement consultation history storage
+    - Create ConsultationHistory component
+    - Add consultation summary generation
+    - Build prescription issuance during consultation
+    - Store consultation notes and outcomes
+    - _Requirements: 3.10, 12.1, 12.6_
+
+  - [ ]* 10.9 Write property tests for consultation system
+    - **Property 3: Message delivery consistency**
+    - **Property 4: Video call connection reliability**
+    - **Validates: Requirements 3.3, 3.4, 3.5, 3.6**
+
+  - [ ]* 10.10 Write integration tests for consultation flow
+    - Test complete consultation workflow (request → accept → chat → video → end)
+    - Test appointment scheduling and management
+    - Test session history and data persistence
+    - _Requirements: 3.1, 3.2, 3.7, 3.10_
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
