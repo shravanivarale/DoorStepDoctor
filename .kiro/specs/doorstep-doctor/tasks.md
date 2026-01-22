@@ -236,6 +236,88 @@ This implementation plan focuses specifically on integrating Firebase Authentica
     - Test session history and data persistence
     - _Requirements: 3.1, 3.2, 3.7, 3.10_
 
+- [ ] 11. AI-Powered Voice Assistant Implementation
+  - [ ] 11.1 Backend AI Assistant Service Setup
+    - Install and configure OpenAI/Anthropic API for LLM processing
+    - Set up Google Cloud Speech-to-Text API for voice input
+    - Configure Google Cloud Text-to-Speech API for voice output
+    - Create AI assistant service with medical guidance logic
+    - _Requirements: 4.2, 4.3, 4.4_
+
+  - [ ] 11.2 Multi-Language Speech Processing
+    - Configure speech recognition for Hindi, Marathi, Tamil, Telugu, Bengali
+    - Set up language-specific TTS voices for natural output
+    - Implement automatic language detection from voice input
+    - Create language preference management
+    - _Requirements: 4.2, 4.4, 13.6, 13.7_
+
+  - [ ] 11.3 Medical AI Logic and Safety
+    - Implement non-diagnostic medical guidance system
+    - Create urgency assessment and triage logic
+    - Build emergency detection and hospital recommendation
+    - Add conversation context management (5 exchanges)
+    - Implement doctor consultation transition logic
+    - _Requirements: 4.5, 4.6, 4.7, 4.8, 4.9_
+
+  - [ ] 11.4 Backend AI Assistant API Endpoints
+    - Create POST /api/ai-assistant/chat for text interactions
+    - Implement POST /api/ai-assistant/voice for voice processing
+    - Build GET /api/ai-assistant/conversations for history
+    - Add conversation persistence and retrieval
+    - _Requirements: 4.3, 4.8_
+
+  - [ ] 11.5 Frontend Voice Interface Components
+    - Build VoiceInterface component with microphone controls
+    - Create voice recording and playback functionality
+    - Implement real-time audio visualization
+    - Add voice activity detection and auto-stop
+    - Handle microphone permissions and browser compatibility
+    - _Requirements: 4.1, 4.2, 4.4_
+
+  - [ ] 11.6 AI ChatBot Component
+    - Create ChatBot component for text and voice interactions
+    - Implement conversation history display
+    - Add typing indicators and response loading states
+    - Build suggested actions and quick responses
+    - Handle conversation context and memory
+    - _Requirements: 4.3, 4.6, 4.8_
+
+  - [ ] 11.7 Low-Bandwidth Voice Optimization
+    - Implement audio compression for rural connectivity
+    - Create offline voice processing fallback
+    - Add bandwidth detection and quality adjustment
+    - Optimize API calls for minimal data usage
+    - Cache common responses for offline access
+    - _Requirements: 4.10, 6.1, 6.8_
+
+  - [ ] 11.8 Language Selector and Localization
+    - Build LanguageSelector component for voice preferences
+    - Implement UI localization for supported languages
+    - Create culturally appropriate medical terminology
+    - Add voice accent and dialect support
+    - Handle language switching during conversations
+    - _Requirements: 13.1, 13.2, 13.4, 13.7_
+
+  - [ ] 11.9 AI Assistant Integration with Main App
+    - Integrate AI assistant with patient dashboard
+    - Connect with consultation system for doctor transitions
+    - Link with medical profile for personalized guidance
+    - Add AI assistant access from consultation waiting room
+    - Implement analytics tracking for AI interactions
+    - _Requirements: 4.9, 14.3_
+
+  - [ ]* 11.10 Write property tests for AI assistant
+    - **Property 5: Voice processing consistency across languages**
+    - **Property 6: Medical guidance safety (non-diagnostic)**
+    - **Validates: Requirements 4.2, 4.4, 4.5, 4.6**
+
+  - [ ]* 11.11 Write integration tests for AI voice assistant
+    - Test complete voice interaction flow (record → process → respond)
+    - Test multi-language support and switching
+    - Test emergency detection and doctor transition
+    - Test low-bandwidth mode and offline functionality
+    - _Requirements: 4.1, 4.2, 4.7, 4.9, 4.10_
+
 ## Notes
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
