@@ -1,757 +1,442 @@
-# Implementation Plan: Firebase Authentication Integration
+# Implementation Plan: AI Triage Engine for ASHA + PHC Assist
 
 ## Overview
 
-This implementation plan focuses specifically on integrating Firebase Authentication into the existing DoorStepDoctor healthcare platform. The tasks cover Firebase project setup, frontend authentication components, backend verification, role-based access control, and session management to enable secure Patient and Doctor authentication with proper dashboard routing.
+This implementation plan focuses on building an AI-powered clinical decision-support system for ASHA workers and Primary Health Centers in rural India. The system uses AWS serverless architecture with Amazon Bedrock for RAG-based triage, voice-first interaction, and emergency escalation protocols.
+
+## Core Technology Stack
+
+- **Authentication**: Amazon Cognito
+- **API Layer**: Amazon API Gateway
+- **Compute**: AWS Lambda (Serverless)
+- **AI/ML**: Amazon Bedrock (Claude 3 Haiku)
+- **RAG**: Bedrock Knowledge Base + OpenSearch Serverless
+- **Voice**: Amazon Transcribe (STT) + Amazon Polly (TTS)
+- **Database**: Amazon DynamoDB
+- **Storage**: Amazon S3 (Encrypted)
+- **Monitoring**: Amazon CloudWatch
+- **Security**: AWS IAM + AWS KMS
 
 ## Tasks
 
-- [ ] 1. Firebase Project Setup and Configuration
-  - Create Firebase project and enable Authentication
-  - Configure authentication providers (Email/Password, Phone)
-  - Set up Firebase Admin SDK for backend verification
-  - Configure environment variables for Firebase credentials
-  - _Requirements: 1.1, 1.2, 1.3_
+- [ ] 1. AWS Infrastructure Setup and Configuration
+  - Set up AWS account and configure billing alerts ($30, $60, $90)
+  - Create IAM roles with least-privilege permissions
+  - Configure AWS KMS for encryption keys
+  - Set up CloudWatch logging and monitoring
+  - Configure AWS regions for optimal latency
+  - _Requirements: 8.1, 8.2, 10.5_
 
-- [ ] 2. Backend Firebase Authentication Integration
-  - [ ] 2.1 Install and configure Firebase Admin SDK
-    - Install firebase-admin package
-    - Initialize Firebase Admin with service account credentials
-    - Create Firebase verification middleware
-    - _Requirements: 1.3, 1.4_
+- [ ] 2. Amazon Cognito Authentication System
+  - [ ] 2.1 Configure Cognito User Pool
+    - Create Cognito User Pool for ASHA workers and PHC doctors
+    - Configure user attributes (role, location, PHC assignment)
+    - Set up password policies and MFA for PHC doctors
+    - Configure session timeout (30 minutes inactivity)
+    - _Requirements: 1.1, 1.2, 1.3_
 
-  - [ ] 2.2 Implement authentication middleware and JWT token generation
-    - Create middleware to verify Firebase ID tokens
-    - Generate custom JWT session tokens with role information
-    - Implement role-based access control middleware
-    - _Requirements: 1.5, 1.6, 1.7_
+  - [ ] 2.2 Implement Role-Based Access Control
+    - Create IAM roles for ASHA workers and PHC doctors
+    - Configure Cognito Identity Pool for AWS resource access
+    - Implement role-based permissions (read/write/admin)
+    - Set up authentication event logging
+    - _Requirements: 1.3, 1.4, 1.5_
 
-  - [ ]* 2.3 Write property test for token verification
-    - **Property 1: Token verification consistency**
-    - **Validates: Requirements 1.3, 1.4**
-
-  - [ ] 2.4 Update user registration endpoints
-    - Modify POST /api/auth/register to work with Firebase
-    - Add Firebase UID to user schema and database operations
-    - Implement role-specific registration validation
-    - _Requirements: 1.1, 1.2, 1.10_
-
-  - [ ] 2.5 Update authentication endpoints
-    - Modify POST /api/auth/login to verify Firebase tokens
-    - Update logout endpoint to handle Firebase session cleanup
-    - Implement session token refresh mechanism
-    - _Requirements: 1.3, 1.7, 1.8_
-
-- [ ] 3. Frontend Firebase Authentication Setup
-  - [ ] 3.1 Install and configure Firebase SDK
-    - Install firebase package for React
-    - Create Firebase configuration and initialization
-    - Set up Firebase Auth context provider
-    - _Requirements: 1.3_
-
-  - [ ] 3.2 Create authentication hook and context
-    - Implement useAuth hook for authentication state management
-    - Create AuthContext for global authentication state
-    - Handle Firebase authentication state persistence
-    - _Requirements: 1.7, 1.8_
-
-  - [ ]* 3.3 Write unit tests for authentication context
-    - Test authentication state management
-    - Test session persistence across browser sessions
-    - _Requirements: 1.7, 1.8_
-
-- [ ] 4. Authentication UI Components
-  - [ ] 4.1 Create login form component
-    - Build LoginForm component with email/password fields
-    - Integrate Firebase signInWithEmailAndPassword
-    - Add form validation and error handling
-    - _Requirements: 1.3, 1.4_
-
-  - [ ] 4.2 Create registration forms for patients and doctors
-    - Build PatientRegisterForm with required fields (email, phone, name, age, location)
-    - Build DoctorRegisterForm with required fields (email, phone, name, license, specialization)
-    - Integrate Firebase createUserWithEmailAndPassword
+  - [ ] 2.3 Build Authentication UI Components
+    - Create login form with MFA support
+    - Build registration flow for ASHA workers
+    - Implement session management and token refresh
+    - Add authentication error handling
     - _Requirements: 1.1, 1.2_
 
-  - [ ] 4.3 Implement OTP verification component
-    - Create OTPVerification component for phone number verification
-    - Integrate Firebase phone authentication
-    - Handle OTP input and verification flow
-    - _Requirements: 1.9_
-
-  - [ ]* 4.4 Write unit tests for authentication forms
-    - Test form validation and submission
-    - Test error handling and user feedback
-    - _Requirements: 1.1, 1.2, 1.4_
-
-- [ ] 5. Role-Based Dashboard Routing
-  - [ ] 5.1 Create protected route component
-    - Implement ProtectedRoute component with authentication check
-    - Add role-based access control for routes
-    - Handle unauthenticated user redirects
-    - _Requirements: 1.5, 1.6_
-
-  - [ ] 5.2 Implement dashboard routing logic
-    - Create role-based dashboard routing (Patient vs Doctor)
-    - Update PatientDashboard with authentication integration
-    - Update DoctorDashboard with authentication integration
-    - _Requirements: 1.5, 1.6_
-
-  - [ ] 5.3 Add authentication guards to existing components
-    - Protect medical records routes for patients
-    - Protect consultation routes with proper role checks
-    - Add authentication checks to API calls
-    - _Requirements: 1.5, 1.6_
-
-- [ ] 6. Session Management and Persistence
-  - [ ] 6.1 Implement session persistence
-    - Configure Firebase Auth to persist sessions across browser sessions
-    - Handle automatic token refresh
-    - Implement session timeout handling
-    - _Requirements: 1.7, 1.8_
-
-  - [ ] 6.2 Create logout functionality
-    - Implement logout component and functionality
-    - Clear Firebase authentication state
-    - Clear local storage and session data
-    - Redirect to login page after logout
-    - _Requirements: 1.7_
-
-  - [ ]* 6.3 Write property test for session management
-    - **Property 2: Session persistence consistency**
-    - **Validates: Requirements 1.7, 1.8**
-
-- [ ] 7. Security and Error Handling
-  - [ ] 7.1 Implement comprehensive error handling
-    - Add error handling for Firebase authentication errors
-    - Create user-friendly error messages
-    - Implement retry logic for network failures
-    - _Requirements: 1.4_
-
-  - [ ] 7.2 Add security headers and validation
-    - Implement input validation for all authentication forms
-    - Add CSRF protection for authentication endpoints
-    - Ensure secure token transmission (HTTPS only)
-    - _Requirements: 1.4, 1.10_
-
-  - [ ]* 7.3 Write security tests
-    - Test authentication bypass attempts
-    - Test role escalation prevention
-    - Test token tampering detection
-    - _Requirements: 1.4, 1.5, 1.6_
-
-- [ ] 8. Integration and Testing
-  - [ ] 8.1 Wire authentication components together
-    - Connect all authentication components to main app
-    - Update existing API calls to include authentication headers
-    - Test complete authentication flow (register → login → dashboard)
-    - _Requirements: 1.1, 1.2, 1.3, 1.5, 1.6_
-
-  - [ ]* 8.2 Write integration tests for authentication flow
-    - Test complete user registration and login flow
-    - Test role-based dashboard routing
-    - Test session persistence across page refreshes
-    - _Requirements: 1.1, 1.2, 1.3, 1.5, 1.6, 1.7_
-
-  - [ ] 8.3 Update existing components for authentication
-    - Update consultation components to use authenticated user data
-    - Update medical records components with proper access control
-    - Update AI assistant to associate conversations with authenticated users
-    - _Requirements: 1.5, 1.6_
-
-- [ ] 9. Final checkpoint - Ensure all authentication tests pass
-  - Ensure all authentication tests pass, ask the user if questions arise.
-
-- [ ] 10. Real-Time Chat and Video Consultation Implementation
-  - [ ] 10.1 Backend Socket.IO Setup
-    - Install and configure Socket.IO server
-    - Create consultation socket handlers for real-time messaging
-    - Implement WebRTC signaling server for video calls
-    - Set up consultation room management
-    - _Requirements: 3.1, 3.2, 3.3, 3.4_
-
-  - [ ] 10.2 Backend Consultation API Endpoints
-    - Implement POST /api/consultations/request endpoint
-    - Create GET /api/consultations/active endpoint
-    - Build PUT /api/consultations/:id/accept endpoint
-    - Add GET /api/consultations/history endpoint
-    - Implement consultation status management
-    - _Requirements: 3.1, 3.2, 3.10_
-
-  - [ ] 10.3 Frontend Socket.IO Client Setup
-    - Install and configure Socket.IO client
-    - Create useSocket hook for connection management
-    - Implement consultation event handlers
-    - Set up real-time message synchronization
-    - _Requirements: 3.3, 3.4_
-
-  - [ ] 10.4 Chat Interface Implementation
-    - Build ChatInterface component for real-time messaging
-    - Implement message sending and receiving
-    - Add typing indicators and message status
-    - Create message history display
-    - Handle message persistence and offline sync
-    - _Requirements: 3.3, 3.4, 3.10_
-
-  - [ ] 10.5 WebRTC Video Call Implementation
-    - Install WebRTC dependencies (or Twilio SDK)
-    - Create VideoCall component with camera/microphone controls
-    - Implement peer-to-peer connection establishment
-    - Add call initiation, acceptance, and termination
-    - Handle connection quality and fallback to audio-only
-    - _Requirements: 3.5, 3.6, 3.7, 3.9_
-
-  - [ ] 10.6 Consultation Room Component
-    - Build ConsultationRoom component combining chat and video
-    - Implement consultation timer and duration tracking
-    - Add participant status indicators (online/offline)
-    - Create consultation controls (mute, camera, end call)
-    - Handle consultation state management
-    - _Requirements: 3.2, 3.7, 3.8_
-
-  - [ ] 10.7 Appointment Scheduling System
-    - Create appointment booking interface for patients
-    - Implement doctor availability management
-    - Build appointment confirmation and reminder system
-    - Add calendar integration for scheduling
-    - Handle appointment rescheduling and cancellation
-    - _Requirements: 11.1, 11.2, 11.3, 11.4_
-
-  - [ ] 10.8 Session History and Records
-    - Implement consultation history storage
-    - Create ConsultationHistory component
-    - Add consultation summary generation
-    - Build prescription issuance during consultation
-    - Store consultation notes and outcomes
-    - _Requirements: 3.10, 12.1, 12.6_
-
-  - [ ]* 10.9 Write property tests for consultation system
-    - **Property 3: Message delivery consistency**
-    - **Property 4: Video call connection reliability**
-    - **Validates: Requirements 3.3, 3.4, 3.5, 3.6**
-
-  - [ ]* 10.10 Write integration tests for consultation flow
-    - Test complete consultation workflow (request → accept → chat → video → end)
-    - Test appointment scheduling and management
-    - Test session history and data persistence
-    - _Requirements: 3.1, 3.2, 3.7, 3.10_
-
-- [ ] 11. AI-Powered Voice Assistant Implementation
-  - [ ] 11.1 Backend AI Assistant Service Setup
-    - Install and configure OpenAI/Anthropic API for LLM processing
-    - Set up Google Cloud Speech-to-Text API for voice input
-    - Configure Google Cloud Text-to-Speech API for voice output
-    - Create AI assistant service with medical guidance logic
-    - _Requirements: 4.2, 4.3, 4.4_
-
-  - [ ] 11.2 Multi-Language Speech Processing
-    - Configure speech recognition for Hindi, Marathi, Tamil, Telugu, Bengali
-    - Set up language-specific TTS voices for natural output
-    - Implement automatic language detection from voice input
-    - Create language preference management
-    - _Requirements: 4.2, 4.4, 13.6, 13.7_
-
-  - [ ] 11.3 Medical AI Logic and Safety
-    - Implement non-diagnostic medical guidance system
-    - Create urgency assessment and triage logic
-    - Build emergency detection and hospital recommendation
-    - Add conversation context management (5 exchanges)
-    - Implement doctor consultation transition logic
-    - _Requirements: 4.5, 4.6, 4.7, 4.8, 4.9_
-
-  - [ ] 11.4 Backend AI Assistant API Endpoints
-    - Create POST /api/ai-assistant/chat for text interactions
-    - Implement POST /api/ai-assistant/voice for voice processing
-    - Build GET /api/ai-assistant/conversations for history
-    - Add conversation persistence and retrieval
-    - _Requirements: 4.3, 4.8_
-
-  - [ ] 11.5 Frontend Voice Interface Components
-    - Build VoiceInterface component with microphone controls
-    - Create voice recording and playback functionality
-    - Implement real-time audio visualization
-    - Add voice activity detection and auto-stop
-    - Handle microphone permissions and browser compatibility
-    - _Requirements: 4.1, 4.2, 4.4_
-
-  - [ ] 11.6 AI ChatBot Component
-    - Create ChatBot component for text and voice interactions
-    - Implement conversation history display
-    - Add typing indicators and response loading states
-    - Build suggested actions and quick responses
-    - Handle conversation context and memory
-    - _Requirements: 4.3, 4.6, 4.8_
-
-  - [ ] 11.7 Low-Bandwidth Voice Optimization
-    - Implement audio compression for rural connectivity
-    - Create offline voice processing fallback
-    - Add bandwidth detection and quality adjustment
-    - Optimize API calls for minimal data usage
-    - Cache common responses for offline access
-    - _Requirements: 4.10, 6.1, 6.8_
-
-  - [ ] 11.8 Language Selector and Localization
-    - Build LanguageSelector component for voice preferences
-    - Implement UI localization for supported languages
-    - Create culturally appropriate medical terminology
-    - Add voice accent and dialect support
-    - Handle language switching during conversations
-    - _Requirements: 13.1, 13.2, 13.4, 13.7_
-
-  - [ ] 11.9 AI Assistant Integration with Main App
-    - Integrate AI assistant with patient dashboard
-    - Connect with consultation system for doctor transitions
-    - Link with medical profile for personalized guidance
-    - Add AI assistant access from consultation waiting room
-    - Implement analytics tracking for AI interactions
-    - _Requirements: 4.9, 14.3_
-
-  - [ ]* 11.10 Write property tests for AI assistant
-    - **Property 5: Voice processing consistency across languages**
-    - **Property 6: Medical guidance safety (non-diagnostic)**
-    - **Validates: Requirements 4.2, 4.4, 4.5, 4.6**
-
-  - [ ]* 11.11 Write integration tests for AI voice assistant
-    - Test complete voice interaction flow (record → process → respond)
-    - Test multi-language support and switching
-    - Test emergency detection and doctor transition
-    - Test low-bandwidth mode and offline functionality
-    - _Requirements: 4.1, 4.2, 4.7, 4.9, 4.10_
-
-- [ ] 12. Pharmacy Integration System Implementation
-  - [ ] 12.1 Backend Pharmacy Data Models and Database
-    - Create Pharmacy model with location, inventory, and business details
-    - Implement MedicineInventory schema with stock management
-    - Build MedicineOrder model for order workflow
-    - Set up geospatial indexes for location-based queries
-    - Create pharmacy verification and rating system
-    - _Requirements: 5.1, 5.3, 5.4, 5.10_
-
-  - [ ] 12.2 Location Services and Geospatial Features
-    - Integrate Google Maps API for pharmacy locations
-    - Implement user location detection (GPS/manual entry)
-    - Create nearby pharmacy search with radius filtering
-    - Build distance calculation and sorting algorithms
-    - Add location permission handling and fallbacks
-    - _Requirements: 5.1, 5.7_
-
-  - [ ] 12.3 Backend Pharmacy API Endpoints
-    - Create GET /api/pharmacy/nearby for location-based search
-    - Implement GET /api/pharmacy/search-medicine for availability queries
-    - Build POST /api/pharmacy/order for medicine ordering
-    - Add GET /api/pharmacy/orders for order history
-    - Create pharmacy management endpoints for store owners
-    - _Requirements: 5.1, 5.2, 5.5, 5.9_
-
-  - [ ] 12.4 Medicine Inventory Management System
-    - Build inventory CRUD operations for pharmacy owners
-    - Implement real-time stock level updates
-    - Create medicine search with generic name matching
-    - Add expiry date tracking and alerts
-    - Build bulk inventory import/export functionality
-    - _Requirements: 5.2, 5.3, 5.8, 5.10_
-
-  - [ ] 12.5 Order Workflow and Management
-    - Implement complete order lifecycle (placed → confirmed → prepared → delivered)
-    - Create order notification system for pharmacies
-    - Build order tracking and status updates
-    - Add order cancellation and refund handling
-    - Implement delivery time estimation
-    - _Requirements: 5.5, 5.6, 5.9_
-
-  - [ ] 12.6 Frontend Pharmacy Finder Component
-    - Build PharmacyFinder component with interactive map
-    - Implement location-based pharmacy search interface
-    - Create pharmacy details view with contact information
-    - Add distance display and navigation integration
-    - Handle location permissions and error states
-    - _Requirements: 5.1, 5.4, 5.7_
-
-  - [ ] 12.7 Medicine Search and Availability Interface
-    - Create MedicineSearch component with autocomplete
-    - Implement availability display across multiple pharmacies
-    - Build price comparison and sorting features
-    - Add alternative medicine suggestions
-    - Create stock level indicators and alerts
-    - _Requirements: 5.2, 5.3, 5.8_
-
-  - [ ] 12.8 Order Placement and Tracking System
-    - Build order placement interface with prescription upload
-    - Implement shopping cart functionality for multiple medicines
-    - Create order confirmation and payment integration
-    - Build OrderTracking component for delivery status
-    - Add order history and reorder functionality
-    - _Requirements: 5.5, 5.6, 5.9_
-
-  - [ ] 12.9 Pharmacy Owner Dashboard
-    - Create pharmacy registration and verification interface
-    - Build inventory management dashboard for store owners
-    - Implement order management and fulfillment interface
-    - Add analytics for sales and inventory turnover
-    - Create notification system for new orders
-    - _Requirements: 5.6, 5.10_
-
-  - [ ] 12.10 Integration with Prescription System
-    - Connect pharmacy system with doctor prescriptions
-    - Implement prescription-to-order workflow
-    - Add prescription verification for controlled medicines
-    - Create automatic medicine suggestions from prescriptions
-    - Build prescription sharing with selected pharmacies
-    - _Requirements: 12.4, 12.5_
-
-  - [ ]* 12.11 Write property tests for pharmacy system
-    - **Property 7: Location-based search accuracy**
-    - **Property 8: Inventory consistency across operations**
-    - **Validates: Requirements 5.1, 5.2, 5.10**
-
-  - [ ]* 12.12 Write integration tests for pharmacy workflow
-    - Test complete medicine ordering workflow
-    - Test location-based pharmacy discovery
-    - Test inventory management and real-time updates
-    - Test prescription integration and fulfillment
-    - _Requirements: 5.1, 5.2, 5.5, 5.9, 5.10_
-
-- [ ] 13. Three.js Interactive Dashboard Implementation
-  - [ ] 13.1 Three.js Setup and Core Infrastructure
-    - Install Three.js and related dependencies (React Three Fiber, Drei)
-    - Set up Three.js scene, camera, and renderer configuration
-    - Create responsive canvas component with device detection
-    - Implement performance monitoring and FPS optimization
-    - Add fallback detection for low-end devices
-    - _Requirements: 7.1, 7.6, 7.7, 7.10_
-
-  - [ ] 13.2 3D Health Metrics Visualization
-    - Create 3D heart rate visualization with animated pulse
-    - Build blood pressure gauge with systolic/diastolic indicators
-    - Implement medication adherence progress rings
-    - Add consultation history timeline in 3D space
-    - Create smooth transitions between different health metrics
-    - _Requirements: 7.1, 7.2, 7.5, 7.9_
-
-  - [ ] 13.3 Interactive Controls and Navigation
-    - Implement orbit controls for rotation and zoom
-    - Add touch controls for mobile devices
-    - Create keyboard navigation for accessibility
-    - Build metric selection and filtering interface
-    - Add smooth camera transitions between views
-    - _Requirements: 7.3, 7.7, 7.8_
-
-  - [ ] 13.4 Health Data Integration and Real-time Updates
-    - Connect 3D dashboard with patient medical profile data
-    - Implement real-time health metric updates
-    - Create data interpolation for smooth animations
-    - Add historical data visualization with time controls
-    - Build data loading states and error handling
-    - _Requirements: 7.2, 7.5, 7.9_
-
-  - [ ] 13.5 3D Village/Hospital Map Interface
-    - Create 3D village environment with terrain and buildings
-    - Build interactive hospital and clinic models
-    - Implement click-to-select functionality for healthcare facilities
-    - Add distance indicators and navigation paths
-    - Create facility information overlays and tooltips
-    - _Requirements: 7.1, 7.3, 7.4_
-
-  - [ ] 13.6 Performance Optimization for Low-End Devices
-    - Implement Level of Detail (LOD) system for 3D models
-    - Create automatic quality adjustment based on device performance
-    - Add texture compression and model simplification
-    - Build frame rate monitoring and adaptive rendering
-    - Implement static fallback mode for very low-end devices
-    - _Requirements: 7.6, 7.7, 7.10_
-
-  - [ ] 13.7 Animation System and Visual Effects
-    - Create smooth health metric animations and transitions
-    - Build particle effects for data visualization
-    - Implement easing functions for natural movement
-    - Add hover effects and interactive feedback
-    - Create loading animations and progress indicators
-    - _Requirements: 7.5, 7.9_
-
-  - [ ] 13.8 Mobile and Responsive Design
-    - Optimize 3D rendering for mobile devices
-    - Implement touch gestures for navigation
-    - Create responsive layout for different screen sizes
-    - Add mobile-specific performance optimizations
-    - Build orientation change handling
-    - _Requirements: 7.7, 8.5_
-
-  - [ ] 13.9 Accessibility and Alternative Interfaces
-    - Implement keyboard navigation for 3D elements
-    - Add screen reader support with ARIA labels
-    - Create high contrast mode for 3D visualizations
-    - Build alternative text-based dashboard for accessibility
-    - Add voice descriptions for 3D elements
-    - _Requirements: 7.8, 8.6, 8.7_
-
-  - [ ] 13.10 Low-Bandwidth Mode Integration
-    - Create static health summary as Three.js alternative
-    - Implement bandwidth detection and automatic fallback
-    - Build lightweight 2D visualizations for low connectivity
-    - Add manual toggle between 3D and static modes
-    - Optimize asset loading for slow connections
-    - _Requirements: 6.6, 7.6, 6.10_
-
-  - [ ] 13.11 Dashboard Integration with Main Application
-    - Integrate ThreeJSHealthDashboard with PatientDashboard
-    - Connect with consultation history and medical records
-    - Add dashboard widgets and customization options
-    - Implement user preferences for visualization settings
-    - Create dashboard sharing and export functionality
-    - _Requirements: 7.1, 7.2, 7.9_
-
-  - [ ]* 13.12 Write property tests for Three.js dashboard
-    - **Property 9: 3D rendering performance consistency**
-    - **Property 10: Health data visualization accuracy**
-    - **Validates: Requirements 7.1, 7.2, 7.5, 7.10**
-
-  - [ ]* 13.13 Write integration tests for 3D dashboard
-    - Test 3D health metrics visualization and interactions
-    - Test village/hospital map functionality
-    - Test performance optimization and fallback modes
-    - Test accessibility features and keyboard navigation
-    - _Requirements: 7.1, 7.3, 7.6, 7.8, 7.10_
-
-- [ ] 14. Low-Bandwidth and Performance Optimization Implementation
-  - [ ] 14.1 Bandwidth Detection and Mode Management
-    - Implement network speed detection and monitoring
-    - Create automatic low-bandwidth mode activation (< 2Mbps)
-    - Build manual bandwidth mode toggle with user preferences
-    - Add connection quality indicators and status display
-    - Implement mode persistence across sessions
-    - _Requirements: 6.1, 6.5, 6.9_
-
-  - [ ] 14.2 Lazy Loading and Code Splitting
-    - Implement React lazy loading for all major components
-    - Set up route-based code splitting with React.lazy
-    - Create component-level lazy loading for heavy features
-    - Add progressive loading for Three.js dashboard
-    - Implement lazy loading for images and media assets
-    - _Requirements: 6.8, 7.10, 10.2_
-
-  - [ ] 14.3 Image and Media Compression System
-    - Implement automatic image compression and resizing
-    - Create multiple image quality levels (high/medium/low)
-    - Add WebP format support with fallbacks
-    - Build progressive JPEG loading for medical images
-    - Implement video compression for consultation recordings
-    - _Requirements: 6.3, 6.10_
-
-  - [ ] 14.4 Offline Fallback and Caching
-    - Implement Service Worker for offline functionality
-    - Create local storage caching for essential data
-    - Build offline mode for medical profile viewing
-    - Add cached responses for common AI assistant queries
-    - Implement offline consultation history access
-    - _Requirements: 6.8, 4.10_
-
-  - [ ] 14.5 Text-First UI Mode Implementation
-    - Create simplified text-only interface components
-    - Build low-bandwidth versions of all major features
-    - Implement text-based navigation and interactions
-    - Add high contrast text mode for better readability
-    - Create keyboard-only navigation system
-    - _Requirements: 6.2, 6.6, 8.6_
-
-  - [ ] 14.6 Voice-First Interaction Mode
-    - Implement voice navigation for main application features
-    - Create voice commands for consultation actions
-    - Build voice-controlled medical profile management
-    - Add voice shortcuts for common tasks
-    - Implement voice feedback for all user actions
-    - _Requirements: 6.4, 4.1, 4.2_
-
-  - [ ] 14.7 Minimal Data Usage Mode
-    - Implement API response compression (gzip)
-    - Create minimal JSON payloads for low-bandwidth
-    - Add data usage monitoring and alerts
-    - Build request batching and deduplication
-    - Implement smart caching strategies
-    - _Requirements: 6.10, 10.2_
-
-  - [ ] 14.8 Performance Monitoring and Analytics
-    - Implement client-side performance monitoring
-    - Create FPS monitoring for 3D components
-    - Add memory usage tracking and optimization
-    - Build performance alerts and degradation detection
-    - Implement user experience metrics collection
-    - _Requirements: 10.9, 14.4_
-
-  - [ ] 14.9 Device-Specific Optimizations
-    - Create device capability detection system
-    - Implement CPU and memory-based feature scaling
-    - Add battery level consideration for mobile devices
-    - Build thermal throttling detection and response
-    - Create device-specific UI optimizations
-    - _Requirements: 7.7, 10.2_
-
-  - [ ] 14.10 Network Optimization and CDN
-    - Implement CDN integration for static assets
-    - Create geographic content distribution
-    - Add request prioritization and queuing
-    - Build connection pooling and keep-alive optimization
-    - Implement smart retry logic for failed requests
-    - _Requirements: 6.10, 10.2, 10.4_
-
-  - [ ] 14.11 Low-Bandwidth Component Library
-    - Create LowBandwidthDetector component
-    - Build OptimizedComponents for reduced functionality
-    - Implement BandwidthAwareImage component
-    - Create ProgressiveLoader for heavy content
-    - Build DataUsageMonitor component
-    - _Requirements: 6.1, 6.3, 6.8_
-
-  - [ ] 14.12 Integration with Existing Features
-    - Update consultation system for low-bandwidth mode
-    - Optimize AI assistant for minimal data usage
-    - Integrate pharmacy system with offline capabilities
-    - Update Three.js dashboard with performance modes
-    - Add low-bandwidth support to authentication flow
-    - _Requirements: 6.2, 6.4, 6.6, 6.7_
-
-  - [ ]* 14.13 Write property tests for performance optimization
-    - **Property 11: Bandwidth detection accuracy**
-    - **Property 12: Performance degradation prevention**
-    - **Validates: Requirements 6.1, 6.9, 10.2, 10.9**
-
-  - [ ]* 14.14 Write integration tests for low-bandwidth mode
-    - Test automatic bandwidth mode switching
-    - Test offline functionality and data caching
-    - Test performance optimization across all features
-    - Test voice-first and text-first interaction modes
-    - _Requirements: 6.1, 6.4, 6.6, 6.8, 6.9_
-
-- [ ] 15. Privacy, Security, and Ethical Safeguards Implementation
-  - [ ] 15.1 End-to-End Encryption for Communications
-    - Implement client-side encryption for chat messages
-    - Set up WebRTC DTLS encryption for video calls
-    - Create secure key exchange and management system
-    - Add message encryption/decryption in consultation rooms
-    - Implement secure file transfer encryption
-    - _Requirements: 9.1, 9.6_
-
-  - [ ] 15.2 Advanced Role-Based Access Control (RBAC)
-    - Create comprehensive permission system (read/write/admin)
-    - Implement resource-level access control
-    - Build dynamic role assignment and management
-    - Add permission inheritance and delegation
-    - Create audit trail for all access control changes
-    - _Requirements: 9.4, 1.5, 1.6_
-
-  - [ ] 15.3 Medical Data Protection and Compliance
-    - Implement AES-256 encryption for data at rest
-    - Create secure database field-level encryption
-    - Add HIPAA/GDPR compliance features
-    - Build data anonymization and pseudonymization
-    - Implement secure data backup and recovery
-    - _Requirements: 9.2, 9.10_
-
-  - [ ] 15.4 Comprehensive Consent Management System
-    - Create granular consent collection interface
-    - Implement consent versioning and history tracking
-    - Build consent withdrawal and data deletion workflow
-    - Add consent status indicators throughout the app
-    - Create consent audit trail and reporting
-    - _Requirements: 9.5, 9.6_
-
-  - [ ] 15.5 AI Safety and Ethical Disclaimers
-    - Implement AI disclaimer system for medical assistant
-    - Create safety warnings for diagnostic limitations
-    - Add ethical guidelines display and acceptance
-    - Build AI decision transparency features
-    - Implement bias detection and mitigation alerts
-    - _Requirements: 4.5, 4.6, 4.7_
-
-  - [ ] 15.6 Security Headers and Input Validation
-    - Implement comprehensive input sanitization
-    - Add CSRF protection across all endpoints
-    - Set up security headers (CSP, HSTS, X-Frame-Options)
-    - Create rate limiting and DDoS protection
-    - Add SQL injection and XSS prevention
-    - _Requirements: 9.8, 7.2_
-
-  - [ ] 15.7 Audit Logging and Monitoring
-    - Implement comprehensive audit logging system
-    - Create access log tracking for all medical data
-    - Build security event monitoring and alerting
-    - Add user activity tracking and analysis
-    - Implement compliance reporting and exports
-    - _Requirements: 9.3, 14.4_
-
-  - [ ] 15.8 Session Security and Management
-    - Implement secure session token generation
-    - Add session timeout and automatic logout
-    - Create concurrent session management
-    - Build session hijacking prevention
-    - Implement secure password policies and validation
-    - _Requirements: 9.7, 9.8, 1.8_
-
-  - [ ] 15.9 Data Privacy Controls and User Rights
-    - Create user data export functionality
-    - Implement right to be forgotten (data deletion)
-    - Build privacy settings management interface
-    - Add data sharing preferences and controls
-    - Create privacy policy acceptance and updates
-    - _Requirements: 9.5, 9.9, 9.10_
-
-  - [ ] 15.10 Secure File Upload and Storage
-    - Implement virus scanning for uploaded files
-    - Create secure file storage with encryption
-    - Add file type validation and size limits
-    - Build secure file sharing and access controls
-    - Implement file integrity verification
-    - _Requirements: 2.10, 9.2_
-
-  - [ ] 15.11 Frontend Security Components
-    - Create ConsentModal component for permissions
-    - Build PrivacySettings component for user controls
-    - Implement SecurityAlert component for warnings
-    - Add DataUsageIndicator for transparency
-    - Create AIDisclaimerBanner for safety notices
-    - _Requirements: 9.5, 9.6, 4.5_
-
-  - [ ] 15.12 Backend Security Middleware and Services
-    - Create encryption service for sensitive data
-    - Implement audit logging middleware
-    - Build permission checking service
-    - Add security scanning and validation middleware
-    - Create compliance reporting service
-    - _Requirements: 9.2, 9.3, 9.4_
-
-  - [ ] 15.13 Compliance and Regulatory Features
-    - Implement HIPAA compliance features
-    - Add GDPR compliance tools and workflows
-    - Create India DPDP Act compliance features
-    - Build regulatory reporting and documentation
-    - Add compliance monitoring and alerts
-    - _Requirements: 9.10_
-
-  - [ ] 15.14 Security Testing and Penetration Testing
-    - Implement automated security testing
-    - Create vulnerability scanning and assessment
-    - Build security regression testing
-    - Add penetration testing simulation
-    - Implement security code review automation
-    - _Requirements: 9.1, 9.2, 9.4, 9.8_
-
-  - [ ]* 15.15 Write property tests for security features
-    - **Property 13: Encryption consistency and integrity**
-    - **Property 14: Access control enforcement**
-    - **Validates: Requirements 9.1, 9.2, 9.4**
-
-  - [ ]* 15.16 Write integration tests for privacy and security
-    - Test end-to-end encryption for all communications
-    - Test role-based access control across all features
-    - Test consent management and data protection
-    - Test AI safety disclaimers and ethical safeguards
-    - _Requirements: 9.1, 9.4, 9.5, 9.6, 4.5_
+- [ ] 3. Amazon Bedrock Knowledge Base Setup
+  - [ ] 3.1 Prepare Medical Knowledge Documents
+    - Curate WHO rural triage protocols
+    - Collect State PHC Standard Operating Procedures
+    - Gather maternal health guidelines
+    - Compile seasonal disease advisories
+    - Format documents for ingestion (PDF/text)
+    - _Requirements: 5.1, 5.2_
+
+  - [ ] 3.2 Configure Bedrock Knowledge Base
+    - Create Bedrock Knowledge Base instance
+    - Set up OpenSearch Serverless vector store
+    - Configure embedding model for document indexing
+    - Ingest curated medical documents
+    - Test retrieval accuracy with sample queries
+    - _Requirements: 3.1, 3.2, 5.3_
+
+  - [ ] 3.3 Implement Knowledge Base Versioning
+    - Create version control system for knowledge updates
+    - Build document update pipeline
+    - Implement rollback mechanism
+    - Set up change tracking and audit logs
+    - _Requirements: 5.3, 5.4_
+
+- [ ] 4. RAG-Based Triage Engine Implementation
+  - [ ] 4.1 Build Lambda Triage Handler
+    - Create AWS Lambda function for triage processing
+    - Implement Bedrock Knowledge Base query logic
+    - Configure retrieval parameters (Top-3 to Top-5 documents)
+    - Add context assembly for Claude prompt
+    - Set up error handling and retries
+    - _Requirements: 3.1, 3.2, 3.3_
+
+  - [ ] 4.2 Configure Claude 3 Haiku Integration
+    - Set up Amazon Bedrock API access
+    - Configure Claude 3 Haiku model parameters
+    - Set temperature to 0.2 for deterministic output
+    - Limit max tokens to 400 for cost optimization
+    - Implement streaming response handling
+    - _Requirements: 3.3, 6.1_
+
+  - [ ] 4.3 Implement Structured JSON Output
+    - Design JSON schema for triage response
+    - Implement schema validation logic
+    - Add confidence score calculation
+    - Create cited guideline extraction
+    - Build fallback for malformed responses
+    - _Requirements: 3.4, 9.1, 9.2_
+
+  - [ ]* 4.4 Write property tests for triage engine
+    - **Property 1: Triage output schema consistency**
+    - **Property 2: Risk score bounds validation (0.0-1.0)**
+    - **Validates: Requirements 3.4, 9.1, 9.2**
+
+- [ ] 5. Amazon Bedrock Guardrails Configuration
+  - [ ] 5.1 Configure Safety Guardrails
+    - Block medication dosage recommendations
+    - Block diagnostic statements
+    - Block harmful medical advice
+    - Enforce safe fallback responses
+    - Test guardrail trigger scenarios
+    - _Requirements: 3.5, 9.3_
+
+  - [ ] 5.2 Implement Guardrail Monitoring
+    - Log all guardrail trigger events
+    - Create CloudWatch metrics for guardrail rate
+    - Set up alerts for high trigger frequency
+    - Build guardrail effectiveness dashboard
+    - _Requirements: 3.5, 8.5_
+
+- [ ] 6. Emergency Escalation System
+  - [ ] 6.1 Build Emergency Detection Logic
+    - Implement urgency level classification
+    - Create emergency keyword detection
+    - Add risk score threshold configuration
+    - Build automatic escalation triggers
+    - _Requirements: 4.1, 4.2_
+
+  - [ ] 6.2 Implement Emergency Response Workflow
+    - Generate hospital visit recommendations
+    - Provide nearest PHC location lookup
+    - Create referral note generation
+    - Log emergency cases to DynamoDB
+    - Send PHC dashboard notifications
+    - _Requirements: 4.2, 4.3, 4.4, 4.5_
+
+- [ ] 7. Voice-First Interface Implementation
+  - [ ] 7.1 Amazon Transcribe Integration
+    - Configure Transcribe for Indian languages
+    - Implement automatic language detection
+    - Set up real-time streaming transcription
+    - Add transcription confidence scoring
+    - Optimize for 3-second response time
+    - _Requirements: 2.1, 2.2, 2.3_
+
+  - [ ] 7.2 Multi-Language Support
+    - Configure Hindi language model
+    - Add Marathi language support
+    - Implement Tamil language processing
+    - Add Telugu language support
+    - Configure Kannada and Bengali models
+    - _Requirements: 2.5, 2.6_
+
+  - [ ] 7.3 Amazon Polly Text-to-Speech
+    - Configure Polly for voice responses
+    - Select appropriate Indian language voices
+    - Implement audio streaming
+    - Add voice response caching
+    - Optimize audio quality for low bandwidth
+    - _Requirements: 2.1, 7.5_
+
+  - [ ] 7.4 Voice Interface UI Components
+    - Build voice recording component
+    - Create audio visualization
+    - Implement voice activity detection
+    - Add microphone permission handling
+    - Build text fallback interface
+    - _Requirements: 2.1, 2.6_
+
+- [ ] 8. DynamoDB Data Storage
+  - [ ] 8.1 Design DynamoDB Schema
+    - Create triage metadata table
+    - Design user session table
+    - Create emergency case log table
+    - Design knowledge base version table
+    - Set up appropriate indexes
+    - _Requirements: 2.4, 4.4, 8.5_
+
+  - [ ] 8.2 Implement Data Access Layer
+    - Create DynamoDB client wrapper
+    - Implement CRUD operations
+    - Add batch write operations
+    - Build query optimization
+    - Implement data retention policies
+    - _Requirements: 2.4, 8.3_
+
+  - [ ] 8.3 Configure Encryption and Security
+    - Enable encryption at rest (AES-256)
+    - Configure KMS key management
+    - Implement IAM access policies
+    - Set up audit logging
+    - Add data backup strategy
+    - _Requirements: 8.1, 8.3_
+
+- [ ] 9. API Gateway and Lambda Integration
+  - [ ] 9.1 Configure API Gateway
+    - Create REST API endpoints
+    - Set up request/response models
+    - Configure CORS policies
+    - Implement rate limiting
+    - Add API key management
+    - _Requirements: 10.1, 10.3_
+
+  - [ ] 9.2 Build Lambda Functions
+    - Create triage handler Lambda
+    - Build authentication Lambda
+    - Implement voice processing Lambda
+    - Create emergency escalation Lambda
+    - Add analytics aggregation Lambda
+    - _Requirements: 3.1, 4.1, 10.2_
+
+  - [ ] 9.3 Implement Lambda Optimization
+    - Configure memory and timeout settings
+    - Implement Lambda warming strategy
+    - Add connection pooling
+    - Optimize cold start performance
+    - Set up Lambda layers for shared code
+    - _Requirements: 10.1, 10.4_
+
+- [ ] 10. Low-Bandwidth and SMS Mode
+  - [ ] 10.1 Implement Bandwidth Detection
+    - Create network speed detection
+    - Build automatic mode switching
+    - Implement text-only fallback
+    - Add manual mode override
+    - _Requirements: 7.1, 7.5_
+
+  - [ ] 10.2 Build SMS Interface
+    - Configure SMS gateway integration
+    - Implement structured SMS parsing
+    - Create SMS response formatting
+    - Add SMS delivery confirmation
+    - Optimize payload size
+    - _Requirements: 7.2, 7.3, 7.4_
+
+  - [ ] 10.3 Optimize for Low Connectivity
+    - Implement request compression
+    - Add response caching
+    - Minimize API payload size
+    - Build offline data storage
+    - Create sync mechanism
+    - _Requirements: 7.4, 7.5_
+
+- [ ] 11. Seasonal Disease Intelligence System
+  - [ ] 11.1 Build Analytics Aggregation
+    - Create anonymized data aggregation Lambda
+    - Implement symptom frequency tracking
+    - Build district-level data grouping
+    - Add temporal trend analysis
+    - _Requirements: 6.1, 6.2_
+
+  - [ ] 11.2 Implement Disease Spike Detection
+    - Create anomaly detection algorithm
+    - Build threshold-based alerting
+    - Implement heatmap generation
+    - Add weekly trend reporting
+    - _Requirements: 6.2, 6.3_
+
+  - [ ] 11.3 Build QuickSight Dashboard
+    - Configure Amazon QuickSight
+    - Create district health heatmap
+    - Build symptom trend visualizations
+    - Add public health insights display
+    - Implement dashboard access controls
+    - _Requirements: 6.3, 6.4_
+
+- [ ] 12. Frontend Application Development
+  - [ ] 12.1 Build React PWA Foundation
+    - Set up React application with TypeScript
+    - Configure Progressive Web App features
+    - Implement offline support with Service Workers
+    - Add responsive mobile-first design
+    - Configure build optimization
+    - _Requirements: 2.1, 7.1_
+
+  - [ ] 12.2 Create ASHA Worker Interface
+    - Build symptom input form
+    - Create voice recording interface
+    - Implement triage result display
+    - Add emergency alert UI
+    - Build case history view
+    - _Requirements: 2.1, 3.4, 4.2_
+
+  - [ ] 12.3 Build PHC Dashboard
+    - Create emergency case queue
+    - Implement patient referral view
+    - Add district health intelligence display
+    - Build case management interface
+    - Create reporting and analytics view
+    - _Requirements: 4.5, 6.4_
+
+  - [ ] 12.4 Implement UI/UX Optimizations
+    - Add loading states and progress indicators
+    - Implement error handling and user feedback
+    - Create accessibility features (ARIA labels)
+    - Add keyboard navigation support
+    - Optimize for touch interactions
+    - _Requirements: 2.1, 7.1_
+
+- [ ] 13. Security and Compliance Implementation
+  - [ ] 13.1 Implement Data Privacy Controls
+    - Add PII separation layer
+    - Implement data anonymization
+    - Create audit log system
+    - Build data retention policies
+    - Add GDPR/DPDP compliance features
+    - _Requirements: 8.3, 8.4, 8.5_
+
+  - [ ] 13.2 Configure TLS and Encryption
+    - Enable TLS 1.2+ for all communications
+    - Configure S3 bucket encryption
+    - Implement DynamoDB encryption at rest
+    - Add KMS key rotation
+    - Set up certificate management
+    - _Requirements: 8.1, 8.2_
+
+  - [ ] 13.3 Implement Access Control and Auditing
+    - Create IAM least-privilege policies
+    - Implement resource-level permissions
+    - Add CloudTrail logging
+    - Build access audit dashboard
+    - Create compliance reporting
+    - _Requirements: 8.5, 8.6_
+
+- [ ] 14. Monitoring and Observability
+  - [ ] 14.1 Configure CloudWatch Monitoring
+    - Set up Lambda function metrics
+    - Create Bedrock API latency tracking
+    - Add token usage monitoring
+    - Implement error rate tracking
+    - Build custom metric dashboards
+    - _Requirements: 10.5, 8.5_
+
+  - [ ] 14.2 Implement Alerting System
+    - Create latency threshold alerts
+    - Add error rate notifications
+    - Implement cost threshold alerts
+    - Build guardrail trigger alerts
+    - Add emergency escalation monitoring
+    - _Requirements: 10.5, 8.5_
+
+  - [ ] 14.3 Build Performance Dashboard
+    - Create real-time metrics visualization
+    - Add historical trend analysis
+    - Implement cost tracking dashboard
+    - Build system health overview
+    - Add user activity analytics
+    - _Requirements: 10.5_
+
+- [ ] 15. Testing and Validation
+  - [ ] 15.1 Create Test Dataset
+    - Build 50 general symptom test cases
+    - Create 10 emergency scenario cases
+    - Add 10 maternal health cases
+    - Include 10 pediatric fever cases
+    - Map cases to triage guidelines
+    - _Requirements: 12.1_
+
+  - [ ] 15.2 Implement Automated Testing
+    - Create unit tests for Lambda functions
+    - Build integration tests for RAG pipeline
+    - Add end-to-end workflow tests
+    - Implement performance benchmarks
+    - Create guardrail validation tests
+    - _Requirements: 12.2_
+
+  - [ ] 15.3 Conduct System Validation
+    - Test response time (<2 seconds)
+    - Validate JSON schema compliance (100%)
+    - Measure emergency detection recall
+    - Test guardrail trigger rate (3-5%)
+    - Validate cost per query (₹1-2)
+    - _Requirements: 12.2, 10.1, 10.4_
+
+  - [ ]* 15.4 Write property tests for system reliability
+    - **Property 3: Response time consistency**
+    - **Property 4: Cost per query bounds**
+    - **Validates: Requirements 10.1, 10.4**
+
+- [ ] 16. Deployment and Production Readiness
+  - [ ] 16.1 Configure AWS Amplify Deployment
+    - Set up Amplify hosting for frontend
+    - Configure CI/CD pipeline
+    - Add environment variable management
+    - Implement blue-green deployment
+    - Set up custom domain and SSL
+    - _Requirements: 13.1_
+
+  - [ ] 16.2 Implement Scalability Features
+    - Configure Lambda auto-scaling
+    - Set up DynamoDB auto-scaling
+    - Implement API Gateway throttling
+    - Add CloudFront CDN
+    - Configure multi-region failover
+    - _Requirements: 10.2, 10.3, 13.2_
+
+  - [ ] 16.3 Production Optimization
+    - Implement cost optimization strategies
+    - Add performance tuning
+    - Configure backup and disaster recovery
+    - Set up monitoring and alerting
+    - Create runbook documentation
+    - _Requirements: 10.4, 10.5, 13.2_
+
+- [ ] 17. Documentation and Training
+  - [ ] 17.1 Create Technical Documentation
+    - Document API endpoints and schemas
+    - Write deployment guide
+    - Create architecture diagrams
+    - Document security configurations
+    - Add troubleshooting guide
+    - _Requirements: All_
+
+  - [ ] 17.2 Build User Documentation
+    - Create ASHA worker user guide
+    - Write PHC doctor manual
+    - Add voice interface instructions
+    - Create emergency protocol guide
+    - Build FAQ and support documentation
+    - _Requirements: 2.1, 4.2_
+
+  - [ ] 17.3 Develop Training Materials
+    - Create video tutorials
+    - Build interactive demos
+    - Add sample case walkthroughs
+    - Create quick reference cards
+    - Develop training assessment
+    - _Requirements: 2.1_
 
 ## Notes
 
-- Tasks marked with `*` are optional and can be skipped for faster MVP
+- Tasks marked with `*` are optional property-based tests
 - Each task references specific requirements for traceability
-- Firebase project must be created before starting implementation
-- Environment variables must be configured for both frontend and backend
-- Property tests validate universal authentication properties
-- Unit tests validate specific authentication scenarios and edge cases
-- Integration tests ensure complete authentication flow works end-to-end
+- AWS credits budget: $100 (with alerts at $30, $60, $90)
+- Target cost per triage: ₹1-2
+- Target response time: <2 seconds
+- Target uptime: 99%
+- Prototype uses Claude 3 Haiku for cost optimization
+- Knowledge Base uses curated limited documents for hackathon scope
+- Test mode available to minimize Bedrock API calls during development
+- Production-scale features (multi-language expansion, district analytics) are architected but partially simulated in prototype
