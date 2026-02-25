@@ -23,7 +23,6 @@ import config from '../config/aws.config';
 import logger from '../utils/logger';
 import {
   BedrockError,
-  GuardrailViolationError,
   KnowledgeBaseError
 } from '../utils/errors';
 import {
@@ -77,7 +76,7 @@ export class BedrockService {
       // Extract and format retrieved documents
       const retrievedDocuments = (response.retrievalResults || []).map(result => ({
         documentId: result.location?.s3Location?.uri || 'unknown',
-        title: result.metadata?.title || 'Medical Protocol',
+        title: String(result.metadata?.title || 'Medical Protocol'),
         excerpt: result.content?.text || '',
         relevanceScore: result.score || 0
       }));
@@ -155,15 +154,6 @@ export class BedrockService {
       
       // Parse response
       const responseBody = JSON.parse(new TextDecoder().decode(response.body));
-      
-      // Check for guardrail triggers
-      if (response.trace) {
-        logger.logGuardrailTrigger(
-          request.userId,
-          'guardrail_check',
-          { trace: response.trace }
-        );
-      }
       
       // Extract and validate structured output
       const triageResponse = this.extractTriageResponse(responseBody);

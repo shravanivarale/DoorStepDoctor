@@ -117,6 +117,20 @@ export class TranscriptionError extends ApplicationError {
 }
 
 /**
+ * Voice processing error - issues with voice services (Transcribe/Polly)
+ */
+export class VoiceProcessingError extends ApplicationError {
+  constructor(operation: string, details?: Record<string, unknown>) {
+    super(
+      `Voice processing failed: ${operation}`,
+      'VOICE_PROCESSING_ERROR',
+      500,
+      { operation, ...details }
+    );
+  }
+}
+
+/**
  * DynamoDB error - database operation failures
  */
 export class DatabaseError extends ApplicationError {

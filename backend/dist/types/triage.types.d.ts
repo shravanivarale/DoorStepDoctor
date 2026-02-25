@@ -1,0 +1,294 @@
+/**
+ * Type Definitions for AI Triage Engine
+ *
+ * This module defines all TypeScript interfaces and types used throughout
+ * the triage system, ensuring type safety and consistency.
+ */
+import { z } from 'zod';
+/**
+ * Urgency levels for patient triage
+ * - low: Non-urgent, can wait for regular appointment
+ * - medium: Should be seen within 24-48 hours
+ * - high: Should be seen within hours
+ * - emergency: Immediate medical attention required
+ */
+export type UrgencyLevel = 'low' | 'medium' | 'high' | 'emergency';
+/**
+ * User roles in the system
+ */
+export type UserRole = 'asha_worker' | 'phc_doctor' | 'admin';
+/**
+ * Supported Indian languages for voice interface
+ */
+export type SupportedLanguage = 'hi-IN' | 'mr-IN' | 'ta-IN' | 'te-IN' | 'kn-IN' | 'bn-IN' | 'en-IN';
+/**
+ * Triage Request Schema
+ * Validates incoming triage requests from ASHA workers
+ */
+export declare const TriageRequestSchema: z.ZodObject<{
+    userId: z.ZodString;
+    patientAge: z.ZodOptional<z.ZodNumber>;
+    patientGender: z.ZodOptional<z.ZodEnum<["male", "female", "other"]>>;
+    symptoms: z.ZodString;
+    language: z.ZodEnum<["hi-IN", "mr-IN", "ta-IN", "te-IN", "kn-IN", "bn-IN", "en-IN"]>;
+    voiceInput: z.ZodDefault<z.ZodBoolean>;
+    location: z.ZodOptional<z.ZodObject<{
+        district: z.ZodString;
+        state: z.ZodString;
+        latitude: z.ZodOptional<z.ZodNumber>;
+        longitude: z.ZodOptional<z.ZodNumber>;
+    }, "strip", z.ZodTypeAny, {
+        district: string;
+        state: string;
+        latitude?: number | undefined;
+        longitude?: number | undefined;
+    }, {
+        district: string;
+        state: string;
+        latitude?: number | undefined;
+        longitude?: number | undefined;
+    }>>;
+    timestamp: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    userId: string;
+    symptoms: string;
+    language: "hi-IN" | "mr-IN" | "ta-IN" | "te-IN" | "kn-IN" | "bn-IN" | "en-IN";
+    voiceInput: boolean;
+    timestamp: string;
+    patientAge?: number | undefined;
+    patientGender?: "male" | "female" | "other" | undefined;
+    location?: {
+        district: string;
+        state: string;
+        latitude?: number | undefined;
+        longitude?: number | undefined;
+    } | undefined;
+}, {
+    userId: string;
+    symptoms: string;
+    language: "hi-IN" | "mr-IN" | "ta-IN" | "te-IN" | "kn-IN" | "bn-IN" | "en-IN";
+    timestamp: string;
+    patientAge?: number | undefined;
+    patientGender?: "male" | "female" | "other" | undefined;
+    voiceInput?: boolean | undefined;
+    location?: {
+        district: string;
+        state: string;
+        latitude?: number | undefined;
+        longitude?: number | undefined;
+    } | undefined;
+}>;
+export type TriageRequest = z.infer<typeof TriageRequestSchema>;
+/**
+ * Triage Response Schema
+ * Structured JSON output from Claude 3 Haiku via Bedrock
+ */
+export declare const TriageResponseSchema: z.ZodObject<{
+    urgencyLevel: z.ZodEnum<["low", "medium", "high", "emergency"]>;
+    riskScore: z.ZodNumber;
+    recommendedAction: z.ZodString;
+    referToPhc: z.ZodBoolean;
+    confidenceScore: z.ZodNumber;
+    citedGuideline: z.ZodString;
+    reasoning: z.ZodOptional<z.ZodString>;
+    redFlags: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+}, "strip", z.ZodTypeAny, {
+    urgencyLevel: "emergency" | "low" | "medium" | "high";
+    riskScore: number;
+    recommendedAction: string;
+    referToPhc: boolean;
+    confidenceScore: number;
+    citedGuideline: string;
+    reasoning?: string | undefined;
+    redFlags?: string[] | undefined;
+}, {
+    urgencyLevel: "emergency" | "low" | "medium" | "high";
+    riskScore: number;
+    recommendedAction: string;
+    referToPhc: boolean;
+    confidenceScore: number;
+    citedGuideline: string;
+    reasoning?: string | undefined;
+    redFlags?: string[] | undefined;
+}>;
+export type TriageResponse = z.infer<typeof TriageResponseSchema>;
+/**
+ * Complete Triage Result
+ * Includes request, response, and metadata
+ */
+export interface TriageResult {
+    triageId: string;
+    request: TriageRequest;
+    response: TriageResponse;
+    metadata: {
+        processingTimeMs: number;
+        bedrockTokensUsed: number;
+        guardrailsTriggered: boolean;
+        retrievedDocuments: number;
+        modelVersion: string;
+        timestamp: string;
+    };
+}
+/**
+ * Knowledge Base Document
+ * Structure for medical protocol documents
+ */
+export interface KnowledgeDocument {
+    documentId: string;
+    title: string;
+    content: string;
+    category: 'triage' | 'maternal' | 'pediatric' | 'seasonal' | 'emergency';
+    source: string;
+    version: string;
+    lastUpdated: string;
+    metadata: Record<string, unknown>;
+}
+/**
+ * Emergency Escalation
+ * Structure for emergency case handling
+ */
+export interface EmergencyEscalation {
+    triageId: string;
+    urgencyLevel: 'emergency';
+    patientInfo: {
+        age?: number;
+        gender?: string;
+        symptoms: string;
+    };
+    location: {
+        district: string;
+        state: string;
+        coordinates?: {
+            latitude: number;
+            longitude: number;
+        };
+    };
+    nearestPhc: {
+        name: string;
+        distance: number;
+        contact: string;
+    };
+    referralNote: string;
+    timestamp: string;
+    notificationSent: boolean;
+}
+/**
+ * User Session
+ * Cognito user session information
+ */
+export interface UserSession {
+    userId: string;
+    role: UserRole;
+    name: string;
+    email: string;
+    phoneNumber?: string;
+    assignedPhc?: string;
+    district: string;
+    state: string;
+    sessionToken: string;
+    expiresAt: string;
+}
+/**
+ * Analytics Event
+ * Structure for district health intelligence
+ */
+export interface AnalyticsEvent {
+    eventId: string;
+    eventType: 'triage' | 'emergency' | 'referral';
+    district: string;
+    state: string;
+    symptoms: string[];
+    urgencyLevel: UrgencyLevel;
+    timestamp: string;
+    anonymized: boolean;
+}
+/**
+ * Bedrock RAG Context
+ * Retrieved context from Knowledge Base
+ */
+export interface RAGContext {
+    query: string;
+    retrievedDocuments: Array<{
+        documentId: string;
+        title: string;
+        excerpt: string;
+        relevanceScore: number;
+    }>;
+    totalDocuments: number;
+    retrievalTimeMs: number;
+}
+/**
+ * Guardrail Event
+ * Logged when Bedrock Guardrails are triggered
+ */
+export interface GuardrailEvent {
+    triageId: string;
+    triggerType: 'medication' | 'diagnosis' | 'harmful_content' | 'template_violation';
+    originalOutput: string;
+    sanitizedOutput: string;
+    timestamp: string;
+    severity: 'low' | 'medium' | 'high';
+}
+/**
+ * Voice Processing Result
+ * Output from Amazon Transcribe
+ */
+export interface VoiceProcessingResult {
+    transcription: string;
+    confidence: number;
+    detectedLanguage: SupportedLanguage;
+    processingTimeMs: number;
+    audioLengthSeconds: number;
+}
+/**
+ * SMS Triage Request
+ * Structured SMS input format
+ */
+export interface SMSTriageRequest {
+    phoneNumber: string;
+    message: string;
+    parsedSymptoms: string;
+    timestamp: string;
+}
+/**
+ * Cost Tracking
+ * Per-triage cost breakdown
+ */
+export interface CostTracking {
+    triageId: string;
+    bedrockCost: number;
+    transcribeCost: number;
+    pollyCost: number;
+    dynamoDbCost: number;
+    totalCost: number;
+    currency: 'INR' | 'USD';
+    timestamp: string;
+}
+/**
+ * Error Response
+ * Standardized error structure
+ */
+export interface ErrorResponse {
+    error: {
+        code: string;
+        message: string;
+        details?: Record<string, unknown>;
+        timestamp: string;
+        requestId: string;
+    };
+}
+/**
+ * API Response Wrapper
+ * Generic API response structure
+ */
+export interface APIResponse<T> {
+    success: boolean;
+    data?: T;
+    error?: ErrorResponse['error'];
+    metadata?: {
+        requestId: string;
+        timestamp: string;
+        processingTimeMs: number;
+    };
+}
+//# sourceMappingURL=triage.types.d.ts.map
