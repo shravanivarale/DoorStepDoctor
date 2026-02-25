@@ -1,0 +1,51 @@
+version = 0.1
+
+[default]
+[default.global.parameters]
+stack_name = "asha-triage-dev"
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.validate.parameters]
+lint = true
+
+[default.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+s3_prefix = "asha-triage"
+region = "us-east-1"
+image_repositories = []
+
+[default.package.parameters]
+resolve_s3 = true
+
+[default.sync.parameters]
+watch = true
+
+[default.local_start_api.parameters]
+warm_containers = "EAGER"
+
+[default.local_start_lambda.parameters]
+warm_containers = "EAGER"
+
+[development]
+[development.deploy.parameters]
+stack_name = "asha-triage-dev"
+s3_prefix = "asha-triage-dev"
+parameter_overrides = "Environment=development"
+
+[staging]
+[staging.deploy.parameters]
+stack_name = "asha-triage-staging"
+s3_prefix = "asha-triage-staging"
+parameter_overrides = "Environment=staging"
+
+[production]
+[production.deploy.parameters]
+stack_name = "asha-triage-prod"
+s3_prefix = "asha-triage-prod"
+parameter_overrides = "Environment=production"
+confirm_changeset = true

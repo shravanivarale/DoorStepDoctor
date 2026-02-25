@@ -8,7 +8,13 @@
     "test": "jest",
     "test:coverage": "jest --coverage",
     "lint": "eslint . --ext .ts",
-    "deploy": "aws cloudformation deploy --template-file infrastructure/template.yaml --stack-name asha-triage-stack"
+    "deploy": "bash deploy.sh",
+    "deploy:dev": "bash deploy.sh development",
+    "deploy:staging": "bash deploy.sh staging",
+    "deploy:prod": "bash deploy.sh production",
+    "sam:build": "sam build",
+    "sam:local": "sam local start-api",
+    "sam:validate": "sam validate"
   },
   "keywords": ["aws", "lambda", "bedrock", "healthcare", "triage"],
   "author": "DoorStepDoctor Team",

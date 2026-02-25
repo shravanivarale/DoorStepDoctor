@@ -1,0 +1,433 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: AI Triage Engine for ASHA Workers - Serverless Backend
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Timeout: 30
+    MemorySize: 512
+    Environment:
+      Variables:
+        AWS_REGION: !Ref AWS::Region
+        ENVIRONMENT: !Ref Environment
+        ENABLE_DETAILED_LOGGING: 'true'
+        SESSION_TIMEOUT_MINUTES: '30'
+        MAX_RETRIES: '3'
+        TARGET_COST_PER_TRIAGE: '2.0'
+        ENABLE_COST_TRACKING: 'true'
+        TARGET_RESPONSE_TIME_MS: '2000'
+        MAX_CONCURRENT_REQUESTS: '100'
+        PHC_NOTIFICATION_ENABLED: 'true'
+        EMERGENCY_CONTACT_NUMBER: '108'
+        AUTO_ESCALATION_THRESHOLD: '0.8'
+    Tracing: Active
+    Architectures:
+      - arm64
+
+Parameters:
+  Environment:
+    Type: String
+    Default: development
+    AllowedValues:
+      - development
+      - staging
+      - production
+    Description: Deployment environment
+  
+  BedrockModelId:
+    Type: String
+    Default: anthropic.claude-3-haiku-20240307-v1:0
+    Description: Amazon Bedrock model ID
+  
+  BedrockKnowledgeBaseId:
+    Type: String
+    Description: Amazon Bedrock Knowledge Base ID
+  
+  BedrockGuardrailId:
+    Type: String
+    Default: ''
+    Description: Amazon Bedrock Guardrail ID (optional)
+  
+  CognitoUserPoolId:
+    Type: String
+    Description: Amazon Cognito User Pool ID
+  
+  CognitoClientId:
+    Type: String
+    Description: Amazon Cognito Client ID
+  
+  S3BucketName:
+    Type: String
+    Default: asha-triage-storage
+    Description: S3 bucket for voice recordings and documents
+
+Resources:
+  # API Gateway
+  TriageApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub ${AWS::StackName}-api
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !Sub arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}
+      TracingEnabled: true
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+
+  # DynamoDB Tables
+  TriageTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-triage-records
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: triageId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: triageId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserIdIndex
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: ASHA-Triage
+
+  EmergencyTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-emergency-cases
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: emergencyId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: emergencyId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: TimestampIndex
+          KeySchema:
+            - AttributeName: timestamp
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  AnalyticsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-analytics
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: eventId
+          AttributeType: S
+        - AttributeName: district
+          AttributeType: S
+        - AttributeName: datePartition
+          AttributeType: S
+      KeySchema:
+        - AttributeName: eventId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: DistrictDateIndex
+          KeySchema:
+            - AttributeName: district
+              KeyType: HASH
+            - AttributeName: datePartition
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Lambda Functions
+  TriageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-triage
+      CodeUri: ./dist
+      Handler: handlers/triage.handler.handler
+      Description: Main triage processing function
+      Environment:
+        Variables:
+          BEDROCK_MODEL_ID: !Ref BedrockModelId
+          BEDROCK_KB_ID: !Ref BedrockKnowledgeBaseId
+          BEDROCK_GUARDRAIL_ID: !Ref BedrockGuardrailId
+          BEDROCK_MAX_TOKENS: '400'
+          BEDROCK_TEMPERATURE: '0.2'
+          BEDROCK_TOP_P: '0.9'
+          DYNAMODB_TRIAGE_TABLE: !Ref TriageTable
+          DYNAMODB_EMERGENCY_TABLE: !Ref EmergencyTable
+          DYNAMODB_ANALYTICS_TABLE: !Ref AnalyticsTable
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
+          COGNITO_CLIENT_ID: !Ref CognitoClientId
+          S3_BUCKET_NAME: !Ref S3BucketName
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TriageTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EmergencyTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AnalyticsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:Retrieve
+              Resource: '*'
+        - CloudWatchPutMetricPolicy: {}
+      Events:
+        TriagePost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TriageApi
+            Path: /triage
+            Method: POST
+
+  LoginFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-login
+      CodeUri: ./dist
+      Handler: handlers/auth.handler.loginHandler
+      Description: User login function
+      Environment:
+        Variables:
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
+          COGNITO_CLIENT_ID: !Ref CognitoClientId
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:InitiateAuth
+                - cognito-idp:GetUser
+              Resource: !Sub arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}
+      Events:
+        LoginPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TriageApi
+            Path: /auth/login
+            Method: POST
+            Auth:
+              Authorizer: NONE
+
+  RegisterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-register
+      CodeUri: ./dist
+      Handler: handlers/auth.handler.registerHandler
+      Description: User registration function
+      Environment:
+        Variables:
+          COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
+          COGNITO_CLIENT_ID: !Ref CognitoClientId
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:SignUp
+              Resource: !Sub arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${CognitoUserPoolId}
+      Events:
+        RegisterPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TriageApi
+            Path: /auth/register
+            Method: POST
+            Auth:
+              Authorizer: NONE
+
+  VoiceSTTFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-voice-stt
+      CodeUri: ./dist
+      Handler: handlers/voice.handler.speechToTextHandler
+      Description: Speech-to-text function
+      Timeout: 60
+      Environment:
+        Variables:
+          S3_BUCKET_NAME: !Ref S3BucketName
+          TRANSCRIBE_LANGUAGE_CODE: 'hi-IN'
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref S3BucketName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - transcribe:StartTranscriptionJob
+                - transcribe:GetTranscriptionJob
+              Resource: '*'
+      Events:
+        VoiceSTTPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TriageApi
+            Path: /voice/stt
+            Method: POST
+
+  VoiceTTSFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-voice-tts
+      CodeUri: ./dist
+      Handler: handlers/voice.handler.textToSpeechHandler
+      Description: Text-to-speech function
+      Environment:
+        Variables:
+          POLLY_VOICE_ID: 'Aditi'
+          POLLY_ENGINE: 'neural'
+          POLLY_OUTPUT_FORMAT: 'mp3'
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - polly:SynthesizeSpeech
+              Resource: '*'
+      Events:
+        VoiceTTSPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TriageApi
+            Path: /voice/tts
+            Method: POST
+
+  EmergencyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-emergency
+      CodeUri: ./dist
+      Handler: handlers/emergency.handler.getEmergencyCasesHandler
+      Description: Emergency case management function
+      Environment:
+        Variables:
+          DYNAMODB_EMERGENCY_TABLE: !Ref EmergencyTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EmergencyTable
+      Events:
+        GetEmergencyCases:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TriageApi
+            Path: /emergency/cases
+            Method: GET
+
+  # CloudWatch Log Groups
+  TriageFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${TriageFunction}
+      RetentionInDays: 30
+
+  LoginFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${LoginFunction}
+      RetentionInDays: 30
+
+  # CloudWatch Alarms
+  TriageFunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-triage-errors
+      AlarmDescription: Alert when triage function has high error rate
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref TriageFunction
+
+  TriageFunctionLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-triage-latency
+      AlarmDescription: Alert when triage function exceeds 2 second target
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 2000
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref TriageFunction
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub https://${TriageApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+    Export:
+      Name: !Sub ${AWS::StackName}-api-endpoint
+
+  TriageTableName:
+    Description: DynamoDB triage table name
+    Value: !Ref TriageTable
+    Export:
+      Name: !Sub ${AWS::StackName}-triage-table
+
+  EmergencyTableName:
+    Description: DynamoDB emergency table name
+    Value: !Ref EmergencyTable
+    Export:
+      Name: !Sub ${AWS::StackName}-emergency-table
+
+  AnalyticsTableName:
+    Description: DynamoDB analytics table name
+    Value: !Ref AnalyticsTable
+    Export:
+      Name: !Sub ${AWS::StackName}-analytics-table

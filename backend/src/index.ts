@@ -13,6 +13,22 @@ export { authService } from './services/auth.service';
 
 // Handlers
 export { handler as triageHandler } from './handlers/triage.handler';
+export {
+  loginHandler,
+  registerHandler,
+  validateTokenHandler,
+  confirmRegistrationHandler
+} from './handlers/auth.handler';
+export {
+  speechToTextHandler,
+  textToSpeechHandler,
+  detectLanguageHandler
+} from './handlers/voice.handler';
+export {
+  getEmergencyCasesHandler,
+  updateEmergencyStatusHandler,
+  getEmergencyContactHandler
+} from './handlers/emergency.handler';
 
 // Configuration
 export { default as config } from './config/aws.config';
