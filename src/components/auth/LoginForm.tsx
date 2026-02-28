@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { User, Lock, Phone, UserCheck, Stethoscope } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
-interface Props {
-  onLogin: (userData: any) => void;
-}
-
-const LoginForm: React.FC<Props> = ({ onLogin }) => {
+const LoginForm: React.FC = () => {
+  const { login } = useAuth();
+  const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
   const [userType, setUserType] = useState<'patient' | 'doctor'>('patient');
   const [formData, setFormData] = useState({
@@ -31,52 +31,35 @@ const LoginForm: React.FC<Props> = ({ onLogin }) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate authentication process
-    setTimeout(() => {
-      const userData = {
-        id: Date.now().toString(),
-        name: formData.name || 'Demo User',
-        email: formData.email,
-        role: userType,
-        phone: formData.phone,
-        ...(userType === 'patient' && {
-          age: formData.age,
-          location: formData.location
-        }),
-        ...(userType === 'doctor' && {
-          medicalLicense: formData.medicalLicense,
-          specialization: formData.specialization
-        })
-      };
-
-      onLogin(userData);
+    try {
+      await login(formData.email, formData.password);
+      navigate('/');
+    } catch (error) {
+      console.error('Login failed:', error);
+      alert('Login failed. Please check your credentials.');
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
-  const handleDemoLogin = (role: 'patient' | 'doctor') => {
-    const demoData = {
-      patient: {
-        id: 'demo-patient',
-        name: 'Rajesh Kumar',
-        email: 'rajesh@example.com',
-        role: 'patient',
-        phone: '+91-9876543210',
-        age: '35',
-        location: 'Rural Village, Maharashtra'
-      },
-      doctor: {
-        id: 'demo-doctor',
-        name: 'Dr. Priya Sharma',
-        email: 'priya@example.com',
-        role: 'doctor',
-        phone: '+91-9876543211',
-        medicalLicense: 'MH12345',
-        specialization: 'General Medicine'
-      }
+  const handleDemoLogin = async (role: 'patient' | 'doctor' | 'asha') => {
+    const demoCredentials = {
+      patient: { email: 'patient@demo.com', password: 'demo123' },
+      doctor: { email: 'doctor@demo.com', password: 'demo123' },
+      asha: { email: 'asha@demo.com', password: 'demo123' }
     };
 
-    onLogin(demoData[role]);
+    setIsLoading(true);
+    try {
+      const creds = demoCredentials[role];
+      await login(creds.email, creds.password);
+      navigate('/');
+    } catch (error) {
+      console.error('Demo login failed:', error);
+      alert('Demo login failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -288,20 +271,30 @@ const LoginForm: React.FC<Props> = ({ onLogin }) => {
         {/* Demo Login */}
         <div className="mt-6 pt-6 border-t">
           <p className="text-center text-sm text-gray-600 mb-3">Quick Demo Access:</p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
-              onClick={() => handleDemoLogin('patient')}
-              className="button secondary flex items-center justify-center gap-2"
+              onClick={() => handleDemoLogin('asha')}
+              className="button secondary flex items-center justify-center gap-1 text-sm"
+              disabled={isLoading}
             >
-              <User size={16} />
-              Demo Patient
+              <UserCheck size={16} />
+              ASHA
             </button>
             <button
               onClick={() => handleDemoLogin('doctor')}
-              className="button secondary flex items-center justify-center gap-2"
+              className="button secondary flex items-center justify-center gap-1 text-sm"
+              disabled={isLoading}
             >
               <Stethoscope size={16} />
-              Demo Doctor
+              Doctor
+            </button>
+            <button
+              onClick={() => handleDemoLogin('patient')}
+              className="button secondary flex items-center justify-center gap-1 text-sm"
+              disabled={isLoading}
+            >
+              <User size={16} />
+              Patient
             </button>
           </div>
         </div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import { Heart, Users, MessageCircle, Pill, Brain, Shield } from 'lucide-react';
 
 // Import components
@@ -9,18 +9,14 @@ import VoiceInterface from './components/ai-assistant/VoiceInterface';
 import PharmacyFinder from './components/pharmacy/PharmacyFinder';
 import LoginForm from './components/auth/LoginForm';
 import LowBandwidthDetector from './components/low-bandwidth/LowBandwidthDetector';
+import TriageForm from './components/asha/TriageForm';
+import CaseHistory from './components/asha/CaseHistory';
+import EmergencyQueue from './components/phc/EmergencyQueue';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 
-const App: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<any>(null);
+const AppContent: React.FC = () => {
+  const { user, logout } = useAuth();
   const [lowBandwidthMode, setLowBandwidthMode] = useState(false);
-
-  const handleLogin = (userData: any) => {
-    setCurrentUser(userData);
-  };
-
-  const handleLogout = () => {
-    setCurrentUser(null);
-  };
 
   return (
     <Router>
@@ -36,14 +32,23 @@ const App: React.FC = () => {
             </div>
             <ul className="nav-links">
               <li><Link to="/">Home</Link></li>
+              {user && user.role === 'asha' && (
+                <>
+                  <li><Link to="/triage">Triage</Link></li>
+                  <li><Link to="/history">History</Link></li>
+                </>
+              )}
+              {user && user.role === 'phc' && (
+                <li><Link to="/emergency-queue">Emergency Queue</Link></li>
+              )}
               <li><Link to="/dashboard">Dashboard</Link></li>
               <li><Link to="/consultation">Consultation</Link></li>
               <li><Link to="/ai-assistant">AI Assistant</Link></li>
               <li><Link to="/pharmacy">Pharmacy</Link></li>
-              {currentUser ? (
+              {user ? (
                 <li>
-                  <button onClick={handleLogout} className="button secondary">
-                    Logout ({currentUser.name})
+                  <button onClick={logout} className="button secondary">
+                    Logout ({user.name})
                   </button>
                 </li>
               ) : (
@@ -57,34 +62,75 @@ const App: React.FC = () => {
         <div className="container">
           <Routes>
             <Route path="/" element={<HomePage lowBandwidthMode={lowBandwidthMode} />} />
-            <Route path="/login" element={<LoginForm onLogin={handleLogin} />} />
+            <Route 
+              path="/login" 
+              element={user ? <Navigate to="/" /> : <LoginForm />} 
+            />
+            <Route 
+              path="/triage" 
+              element={
+                user && user.role === 'asha' ? (
+                  <TriageForm />
+                ) : (
+                  <Navigate to="/login" />
+                )
+              } 
+            />
+            <Route 
+              path="/history" 
+              element={
+                user && user.role === 'asha' ? (
+                  <CaseHistory />
+                ) : (
+                  <Navigate to="/login" />
+                )
+              } 
+            />
+            <Route 
+              path="/emergency-queue" 
+              element={
+                user && user.role === 'phc' ? (
+                  <EmergencyQueue />
+                ) : (
+                  <Navigate to="/login" />
+                )
+              } 
+            />
             <Route 
               path="/dashboard" 
               element={
                 <ThreeJSHealthDashboard 
-                  user={currentUser} 
+                  user={user} 
                   lowBandwidthMode={lowBandwidthMode} 
                 />
               } 
             />
             <Route 
               path="/consultation" 
-              element={<ConsultationRoom user={currentUser} />} 
+              element={<ConsultationRoom user={user} />} 
             />
             <Route 
               path="/ai-assistant" 
               element={
                 <VoiceInterface 
-                  user={currentUser} 
+                  user={user} 
                   lowBandwidthMode={lowBandwidthMode} 
                 />
               } 
             />
-            <Route path="/pharmacy" element={<PharmacyFinder user={currentUser} />} />
+            <Route path="/pharmacy" element={<PharmacyFinder user={user} />} />
           </Routes>
         </div>
       </div>
     </Router>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 };
 
