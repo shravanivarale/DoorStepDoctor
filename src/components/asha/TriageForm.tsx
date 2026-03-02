@@ -9,6 +9,7 @@ import { Mic, MicOff, Send, AlertCircle } from 'lucide-react';
 import { apiService } from '../../services/api';
 import { TriageRequest, TriageResult, SupportedLanguage } from '../../services/types';
 import { useAuth } from '../../contexts/AuthContext';
+import AudioPlayer from './AudioPlayer';
 
 const TriageForm: React.FC = () => {
   const { user } = useAuth();
@@ -66,10 +67,85 @@ const TriageForm: React.FC = () => {
     }
   };
 
-  const handleVoiceInput = () => {
-    setIsRecording(!isRecording);
-    // TODO: Implement actual voice recording
-    alert('Voice recording feature coming soon!');
+  const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
+  const audioChunksRef = React.useRef<Blob[]>([]);
+
+  const handleVoiceInput = async () => {
+    if (isRecording) {
+      // Stop recording
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+        setIsRecording(false);
+      }
+    } else {
+      // Start recording
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream, {
+          mimeType: 'audio/webm;codecs=opus'
+        });
+        
+        mediaRecorderRef.current = mediaRecorder;
+        audioChunksRef.current = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = async () => {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          
+          // Stop all tracks to release microphone
+          stream.getTracks().forEach(track => track.stop());
+          
+          // Process the audio
+          await processVoiceInput(audioBlob);
+        };
+
+        mediaRecorder.start();
+        setIsRecording(true);
+      } catch (err) {
+        console.error('Error accessing microphone:', err);
+        setError('Unable to access microphone. Please check permissions and try again.');
+      }
+    }
+  };
+
+  const processVoiceInput = async (audioBlob: Blob) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Convert audio blob to base64 for API transmission
+      const reader = new FileReader();
+      reader.readAsDataURL(audioBlob);
+      
+      reader.onloadend = async () => {
+        const base64Audio = reader.result as string;
+        
+        try {
+          // Call voice transcription API
+          const transcription = await apiService.transcribeAudio(base64Audio, language);
+          
+          // Set the transcribed text in the symptoms field
+          setSymptoms(transcription.text);
+          
+          // Show success message
+          setError(null);
+        } catch (err) {
+          console.error('Transcription error:', err);
+          setError('Failed to transcribe audio. Please try typing instead.');
+        } finally {
+          setLoading(false);
+        }
+      };
+    } catch (err) {
+      console.error('Error processing voice input:', err);
+      setError('Failed to process voice input. Please try again.');
+      setLoading(false);
+    }
   };
 
   const getUrgencyColor = (urgency: string) => {
@@ -159,19 +235,32 @@ const TriageForm: React.FC = () => {
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Describe the patient's symptoms in detail..."
                 required
+                disabled={isRecording}
               />
               <button
                 type="button"
                 onClick={handleVoiceInput}
-                className={`absolute bottom-3 right-3 p-2 rounded-full ${
-                  isRecording ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700'
-                } hover:opacity-80 transition-opacity`}
+                disabled={loading}
+                className={`absolute bottom-3 right-3 p-2 rounded-full transition-all ${
+                  isRecording 
+                    ? 'bg-red-500 text-white animate-pulse' 
+                    : 'bg-blue-500 text-white hover:bg-blue-600'
+                } disabled:bg-gray-400 disabled:cursor-not-allowed`}
+                title={isRecording ? 'Stop recording' : 'Start voice recording'}
               >
                 {isRecording ? <MicOff size={20} /> : <Mic size={20} />}
               </button>
             </div>
+            {isRecording && (
+              <div className="flex items-center gap-2 mt-2 text-red-600">
+                <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></div>
+                <p className="text-sm font-medium">Recording... Click microphone to stop</p>
+              </div>
+            )}
             <p className="text-sm text-gray-500 mt-1">
-              Minimum 10 characters required
+              {isRecording 
+                ? 'Speak clearly in your selected language' 
+                : 'Type or use voice input (minimum 10 characters)'}
             </p>
           </div>
 
@@ -224,8 +313,17 @@ const TriageForm: React.FC = () => {
 
             {/* Recommended Action */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <p className="text-sm font-medium text-blue-900 mb-2">Recommended Action:</p>
-              <p className="text-blue-800">{result.response.recommendedAction}</p>
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-blue-900 mb-2">Recommended Action:</p>
+                  <p className="text-blue-800">{result.response.recommendedAction}</p>
+                </div>
+                <AudioPlayer 
+                  text={result.response.recommendedAction}
+                  language={language}
+                  className="ml-2"
+                />
+              </div>
             </div>
 
             {/* PHC Referral */}

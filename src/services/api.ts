@@ -193,6 +193,37 @@ class APIService {
       method: 'GET',
     });
   }
+
+  /**
+   * Transcribe audio to text
+   */
+  async transcribeAudio(audioBase64: string, language: string): Promise<{
+    text: string;
+    confidence: number;
+    detectedLanguage: string;
+  }> {
+    return this.request('/voice/transcribe', {
+      method: 'POST',
+      body: JSON.stringify({ 
+        audio: audioBase64,
+        language,
+        format: 'webm'
+      }),
+    });
+  }
+
+  /**
+   * Get audio for text (TTS)
+   */
+  async getAudioForText(text: string, language: string): Promise<{
+    audioUrl: string;
+    format: string;
+  }> {
+    return this.request('/voice/synthesize', {
+      method: 'POST',
+      body: JSON.stringify({ text, language }),
+    });
+  }
 }
 
 export const apiService = new APIService();
