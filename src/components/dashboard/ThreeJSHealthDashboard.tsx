@@ -60,8 +60,22 @@ const ThreeJSHealthDashboard: React.FC<Props> = ({ user, lowBandwidthMode }) => 
       <div className="grid">
         <div className="card">
           <h2 className="text-xl font-bold mb-4">Interactive 3D Visualization</h2>
-          <div style={{ height: '400px', background: '#f8f9fa', borderRadius: '8px' }}>
-            <Canvas camera={{ position: [0, 0, 10], fov: 60 }}>
+          <div style={{ 
+            height: '400px', 
+            width: '100%',
+            background: '#f8f9fa', 
+            borderRadius: '8px',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+            <Canvas 
+              camera={{ position: [0, 0, 10], fov: 60 }}
+              style={{ 
+                width: '100%', 
+                height: '100%',
+                display: 'block'
+              }}
+            >
               <ambientLight intensity={0.5} />
               <pointLight position={[10, 10, 10]} />
               <OrbitControls enableZoom={true} enablePan={true} enableRotate={true} />
@@ -358,8 +372,22 @@ const VillageHospitalMap: React.FC = () => {
   return (
     <div className="card">
       <h2 className="text-xl font-bold mb-4">3D Village Hospital Map</h2>
-      <div style={{ height: '400px', background: '#f8f9fa', borderRadius: '8px' }}>
-        <Canvas camera={{ position: [0, 5, 10], fov: 60 }}>
+      <div style={{ 
+        height: '400px', 
+        width: '100%',
+        background: '#f8f9fa', 
+        borderRadius: '8px',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        <Canvas 
+          camera={{ position: [0, 5, 10], fov: 60 }}
+          style={{ 
+            width: '100%', 
+            height: '100%',
+            display: 'block'
+          }}
+        >
           <ambientLight intensity={0.6} />
           <directionalLight position={[10, 10, 5]} intensity={1} />
           <OrbitControls enableZoom={true} enablePan={true} enableRotate={true} />

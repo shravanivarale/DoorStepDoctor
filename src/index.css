@@ -203,6 +203,20 @@ body {
   color: #667eea;
 }
 
+/* Fix for Three.js Canvas - prevent it from covering the page */
+canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  position: relative !important;
+}
+
+/* Ensure App container has proper stacking */
+.App {
+  position: relative;
+  z-index: 1;
+}
+
 @media (max-width: 768px) {
   .container {
     padding: 10px;
