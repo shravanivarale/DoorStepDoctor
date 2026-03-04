@@ -31,16 +31,18 @@ export async function speechToTextHandler(
       throw new ValidationError('Request body is required');
     }
 
-    const { audioS3Uri, language } = JSON.parse(event.body);
+    const { audioBase64, language } = JSON.parse(event.body);
 
-    if (!audioS3Uri) {
-      throw new ValidationError('audioS3Uri is required');
+    if (!audioBase64) {
+      throw new ValidationError('audioBase64 is required');
     }
 
-    logger.info('Speech-to-text request', { audioS3Uri, language });
+    logger.info('Speech-to-text request', { language });
+
+    const audioBuffer = Buffer.from(audioBase64, 'base64');
 
     const result = await voiceService.speechToText(
-      audioS3Uri,
+      audioBuffer,
       language as SupportedLanguage || 'hi-IN'
     );
 

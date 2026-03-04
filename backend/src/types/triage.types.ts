@@ -201,6 +201,8 @@ export interface VoiceProcessingResult {
   detectedLanguage: SupportedLanguage;
   processingTimeMs: number;
   audioLengthSeconds: number;
+  requiresConfirmation?: boolean;
+  message?: string;
 }
 
 /**

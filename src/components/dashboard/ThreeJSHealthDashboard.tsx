@@ -2,7 +2,36 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Text, Box, Sphere, Cylinder } from '@react-three/drei';
 import * as THREE from 'three';
-import { Activity, Heart, Thermometer, Droplets } from 'lucide-react';
+import { Activity, Heart, Thermometer, Droplets, AlertTriangle } from 'lucide-react';
+
+// Simple Error Boundary for WebGL/Three.js errors
+class WebGLErrorBoundary extends React.Component<{ fallback: React.ReactNode, children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
+}
+
+// Helper to check WebGL support
+const isWebGLSupported = (): boolean => {
+  try {
+    const canvas = document.createElement('canvas');
+    return !!(window.WebGLRenderingContext &&
+      (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')));
+  } catch (e) {
+    return false;
+  }
+};
+
 
 interface HealthData {
   heartRate: number;
@@ -42,8 +71,10 @@ const ThreeJSHealthDashboard: React.FC<Props> = ({ user, lowBandwidthMode }) => 
     return () => clearInterval(interval);
   }, []);
 
-  if (lowBandwidthMode) {
-    return <StaticHealthDashboard healthData={healthData} user={user} />;
+  const webGLSupported = React.useMemo(() => isWebGLSupported(), []);
+
+  if (lowBandwidthMode || !webGLSupported) {
+    return <StaticHealthDashboard healthData={healthData} user={user} warning={!webGLSupported ? 'WebGL is not supported in your browser. Using text mode.' : undefined} />;
   }
 
   return (
@@ -60,31 +91,33 @@ const ThreeJSHealthDashboard: React.FC<Props> = ({ user, lowBandwidthMode }) => 
       <div className="grid">
         <div className="card">
           <h2 className="text-xl font-bold mb-4">Interactive 3D Visualization</h2>
-          <div style={{ 
-            height: '400px', 
+          <div style={{
+            height: '400px',
             width: '100%',
-            background: '#f8f9fa', 
+            background: '#f8f9fa',
             borderRadius: '8px',
             position: 'relative',
             overflow: 'hidden'
           }}>
-            <Canvas 
-              camera={{ position: [0, 0, 10], fov: 60 }}
-              style={{ 
-                width: '100%', 
-                height: '100%',
-                display: 'block'
-              }}
-            >
-              <ambientLight intensity={0.5} />
-              <pointLight position={[10, 10, 10]} />
-              <OrbitControls enableZoom={true} enablePan={true} enableRotate={true} />
-              
-              <HealthVisualization 
-                healthData={healthData} 
-                onMetricSelect={setSelectedMetric}
-              />
-            </Canvas>
+            <WebGLErrorBoundary fallback={<div className="p-4 bg-red-50 text-red-600 rounded flex items-center gap-2"><AlertTriangle size={24} /> 3D visualization encountered an error. Please switch to low bandwidth mode.</div>}>
+              <Canvas
+                camera={{ position: [0, 0, 10], fov: 60 }}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'block'
+                }}
+              >
+                <ambientLight intensity={0.5} />
+                <pointLight position={[10, 10, 10]} />
+                <OrbitControls enableZoom={true} enablePan={true} enableRotate={true} />
+
+                <HealthVisualization
+                  healthData={healthData}
+                  onMetricSelect={setSelectedMetric}
+                />
+              </Canvas>
+            </WebGLErrorBoundary>
           </div>
         </div>
 
@@ -106,28 +139,28 @@ const HealthVisualization: React.FC<{
   return (
     <group>
       {/* Heart Rate Visualization */}
-      <HeartRateVisualization 
-        heartRate={healthData.heartRate} 
+      <HeartRateVisualization
+        heartRate={healthData.heartRate}
         position={[-4, 2, 0]}
         onClick={() => onMetricSelect('heartRate')}
       />
-      
+
       {/* Blood Pressure Gauge */}
-      <BloodPressureGauge 
+      <BloodPressureGauge
         bloodPressure={healthData.bloodPressure}
         position={[4, 2, 0]}
         onClick={() => onMetricSelect('bloodPressure')}
       />
-      
+
       {/* Temperature Indicator */}
-      <TemperatureIndicator 
+      <TemperatureIndicator
         temperature={healthData.temperature}
         position={[-4, -2, 0]}
         onClick={() => onMetricSelect('temperature')}
       />
-      
+
       {/* Consultation History */}
-      <ConsultationHistory 
+      <ConsultationHistory
         consultations={healthData.consultations}
         position={[4, -2, 0]}
         onClick={() => onMetricSelect('consultations')}
@@ -161,8 +194,8 @@ const HeartRateVisualization: React.FC<{
         onPointerOver={() => setHovered(true)}
         onPointerOut={() => setHovered(false)}
       >
-        <meshStandardMaterial 
-          color={hovered ? "#ff6b6b" : "#e74c3c"} 
+        <meshStandardMaterial
+          color={hovered ? "#ff6b6b" : "#e74c3c"}
           emissive={hovered ? "#ff0000" : "#000000"}
           emissiveIntensity={0.2}
         />
@@ -196,8 +229,8 @@ const BloodPressureGauge: React.FC<{
         onPointerOver={() => setHovered(true)}
         onPointerOut={() => setHovered(false)}
       >
-        <meshStandardMaterial 
-          color={hovered ? "#4ecdc4" : "#3498db"} 
+        <meshStandardMaterial
+          color={hovered ? "#4ecdc4" : "#3498db"}
           emissive={hovered ? "#00ffff" : "#000000"}
           emissiveIntensity={0.1}
         />
@@ -231,8 +264,8 @@ const TemperatureIndicator: React.FC<{
         onPointerOver={() => setHovered(true)}
         onPointerOut={() => setHovered(false)}
       >
-        <meshStandardMaterial 
-          color={hovered ? "#ff9f43" : "#f39c12"} 
+        <meshStandardMaterial
+          color={hovered ? "#ff9f43" : "#f39c12"}
           emissive={hovered ? "#ff6600" : "#000000"}
           emissiveIntensity={0.1}
         />
@@ -269,8 +302,8 @@ const ConsultationHistory: React.FC<{
           onPointerOver={() => setHovered(true)}
           onPointerOut={() => setHovered(false)}
         >
-          <meshStandardMaterial 
-            color={hovered ? "#a29bfe" : "#6c5ce7"} 
+          <meshStandardMaterial
+            color={hovered ? "#a29bfe" : "#6c5ce7"}
             emissive={hovered ? "#5500ff" : "#000000"}
             emissiveIntensity={0.1}
           />
@@ -346,14 +379,14 @@ const HealthMetricsPanel: React.FC<{
           <p className={`text-sm ${metric.color}`}>{metric.status}</p>
         </div>
       </div>
-      
+
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-blue-50 p-3 rounded">
           <Heart className="text-red-600 mb-2" size={20} />
           <p className="text-sm font-medium">Heart Rate</p>
           <p className="text-lg font-bold">{Math.round(healthData.heartRate)}</p>
         </div>
-        
+
         <div className="bg-green-50 p-3 rounded">
           <Droplets className="text-blue-600 mb-2" size={20} />
           <p className="text-sm font-medium">Blood Pressure</p>
@@ -372,59 +405,61 @@ const VillageHospitalMap: React.FC = () => {
   return (
     <div className="card">
       <h2 className="text-xl font-bold mb-4">3D Village Hospital Map</h2>
-      <div style={{ 
-        height: '400px', 
+      <div style={{
+        height: '400px',
         width: '100%',
-        background: '#f8f9fa', 
+        background: '#f8f9fa',
         borderRadius: '8px',
         position: 'relative',
         overflow: 'hidden'
       }}>
-        <Canvas 
-          camera={{ position: [0, 5, 10], fov: 60 }}
-          style={{ 
-            width: '100%', 
-            height: '100%',
-            display: 'block'
-          }}
-        >
-          <ambientLight intensity={0.6} />
-          <directionalLight position={[10, 10, 5]} intensity={1} />
-          <OrbitControls enableZoom={true} enablePan={true} enableRotate={true} />
-          
-          {/* Ground */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]}>
-            <planeGeometry args={[20, 20]} />
-            <meshStandardMaterial color="#90EE90" />
-          </mesh>
-          
-          {/* Hospitals */}
-          <HospitalBuilding 
-            position={[-4, 0, -2]} 
-            name="Rural Health Center"
-            onClick={() => setSelectedHospital('Rural Health Center')}
-          />
-          
-          <HospitalBuilding 
-            position={[4, 0, -2]} 
-            name="District Hospital"
-            onClick={() => setSelectedHospital('District Hospital')}
-          />
-          
-          <HospitalBuilding 
-            position={[0, 0, 4]} 
-            name="Community Clinic"
-            onClick={() => setSelectedHospital('Community Clinic')}
-          />
-          
-          {/* Trees for village atmosphere */}
-          <Tree position={[-6, 0, 2]} />
-          <Tree position={[6, 0, 2]} />
-          <Tree position={[-2, 0, -6]} />
-          <Tree position={[2, 0, -6]} />
-        </Canvas>
+        <WebGLErrorBoundary fallback={<div className="p-4 bg-red-50 text-red-600 rounded flex items-center gap-2"><AlertTriangle size={24} /> Map visualization failed to load.</div>}>
+          <Canvas
+            camera={{ position: [0, 5, 10], fov: 60 }}
+            style={{
+              width: '100%',
+              height: '100%',
+              display: 'block'
+            }}
+          >
+            <ambientLight intensity={0.6} />
+            <directionalLight position={[10, 10, 5]} intensity={1} />
+            <OrbitControls enableZoom={true} enablePan={true} enableRotate={true} />
+
+            {/* Ground */}
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2, 0]}>
+              <planeGeometry args={[20, 20]} />
+              <meshStandardMaterial color="#90EE90" />
+            </mesh>
+
+            {/* Hospitals */}
+            <HospitalBuilding
+              position={[-4, 0, -2]}
+              name="Rural Health Center"
+              onClick={() => setSelectedHospital('Rural Health Center')}
+            />
+
+            <HospitalBuilding
+              position={[4, 0, -2]}
+              name="District Hospital"
+              onClick={() => setSelectedHospital('District Hospital')}
+            />
+
+            <HospitalBuilding
+              position={[0, 0, 4]}
+              name="Community Clinic"
+              onClick={() => setSelectedHospital('Community Clinic')}
+            />
+
+            {/* Trees for village atmosphere */}
+            <Tree position={[-6, 0, 2]} />
+            <Tree position={[6, 0, 2]} />
+            <Tree position={[-2, 0, -6]} />
+            <Tree position={[2, 0, -6]} />
+          </Canvas>
+        </WebGLErrorBoundary>
       </div>
-      
+
       {selectedHospital && (
         <div className="mt-4 p-4 bg-blue-50 rounded">
           <h3 className="font-bold text-blue-600">{selectedHospital}</h3>
@@ -454,18 +489,18 @@ const HospitalBuilding: React.FC<{
         onPointerOver={() => setHovered(true)}
         onPointerOut={() => setHovered(false)}
       >
-        <meshStandardMaterial 
-          color={hovered ? "#ff6b6b" : "#e74c3c"} 
+        <meshStandardMaterial
+          color={hovered ? "#ff6b6b" : "#e74c3c"}
           emissive={hovered ? "#ff0000" : "#000000"}
           emissiveIntensity={0.1}
         />
       </Box>
-      
+
       {/* Roof */}
       <Box args={[2.2, 0.2, 2.2]} position={[0, 1.1, 0]}>
         <meshStandardMaterial color="#8B4513" />
       </Box>
-      
+
       {/* Cross symbol */}
       <Box args={[0.1, 0.8, 0.1]} position={[0, 0.5, 1.01]}>
         <meshStandardMaterial color="#ffffff" />
@@ -473,7 +508,7 @@ const HospitalBuilding: React.FC<{
       <Box args={[0.6, 0.1, 0.1]} position={[0, 0.5, 1.01]}>
         <meshStandardMaterial color="#ffffff" />
       </Box>
-      
+
       {/* Label */}
       <Text
         position={[0, -1.5, 0]}
@@ -496,7 +531,7 @@ const Tree: React.FC<{ position: [number, number, number] }> = ({ position }) =>
       <Cylinder args={[0.1, 0.15, 1]} position={[0, -1, 0]}>
         <meshStandardMaterial color="#8B4513" />
       </Cylinder>
-      
+
       {/* Leaves */}
       <Sphere args={[0.8]} position={[0, 0, 0]}>
         <meshStandardMaterial color="#228B22" />
@@ -509,12 +544,19 @@ const Tree: React.FC<{ position: [number, number, number] }> = ({ position }) =>
 const StaticHealthDashboard: React.FC<{
   healthData: HealthData;
   user: any;
-}> = ({ healthData, user }) => {
+  warning?: string;
+}> = ({ healthData, user, warning }) => {
   return (
     <div>
       <div className="card">
         <h1 className="text-2xl font-bold mb-4">Health Dashboard (Text Mode)</h1>
         {user && <p className="mb-4">Welcome back, {user.name}!</p>}
+        {warning && (
+          <div className="bg-yellow-50 p-4 rounded mb-4 flex items-center gap-2">
+            <AlertTriangle className="text-yellow-600" size={20} />
+            <p className="text-yellow-700">{warning}</p>
+          </div>
+        )}
         <div className="bg-blue-50 p-4 rounded mb-4">
           <p className="text-blue-600">📱 Low bandwidth mode - 3D features disabled for better performance</p>
         </div>

@@ -6,19 +6,15 @@
  */
 
 import {
-  TranscribeClient,
-  StartTranscriptionJobCommand,
-  GetTranscriptionJobCommand
-} from '@aws-sdk/client-transcribe';
+  TranscribeStreamingClient,
+  StartStreamTranscriptionCommand
+} from '@aws-sdk/client-transcribe-streaming';
 import {
   PollyClient,
   SynthesizeSpeechCommand,
   SynthesizeSpeechCommandInput
 } from '@aws-sdk/client-polly';
-import {
-  S3Client,
-  DeleteObjectCommand
-} from '@aws-sdk/client-s3';
+import { CloudWatchClient, PutMetricDataCommand } from '@aws-sdk/client-cloudwatch';
 
 import config, { languageVoiceMap } from '../config/aws.config';
 import logger from '../utils/logger';
@@ -32,14 +28,14 @@ import {
  * Voice Service Class
  */
 export class VoiceService {
-  private transcribeClient: TranscribeClient;
+  private transcribeStreamingClient: TranscribeStreamingClient;
   private pollyClient: PollyClient;
-  private s3Client: S3Client;
+  private cwClient: CloudWatchClient;
 
   constructor() {
-    this.transcribeClient = new TranscribeClient({ region: config.region });
+    this.transcribeStreamingClient = new TranscribeStreamingClient({ region: config.region });
     this.pollyClient = new PollyClient({ region: config.region });
-    this.s3Client = new S3Client({ region: config.region });
+    this.cwClient = new CloudWatchClient({ region: config.region });
   }
 
   /**
@@ -50,102 +46,114 @@ export class VoiceService {
    * @returns Transcription result
    */
   async speechToText(
-    audioS3Uri: string,
+    audioBuffer: Buffer,
     language: SupportedLanguage = 'hi-IN'
   ): Promise<VoiceProcessingResult> {
     const startTime = Date.now();
-    const jobName = `triage-${Date.now()}`;
 
     try {
-      logger.debug('Starting transcription job', { audioS3Uri, language });
+      logger.debug('Starting stream transcription', { language });
 
-      // Start transcription job
-      const startCommand = new StartTranscriptionJobCommand({
-        TranscriptionJobName: jobName,
-        LanguageCode: language,
-        MediaFormat: config.transcribe.mediaFormat as any,
-        Media: {
-          MediaFileUri: audioS3Uri
-        },
-        Settings: {
-          ShowSpeakerLabels: false,
-          MaxSpeakerLabels: 1
+      const audioStream = (async function* () {
+        const chunkSize = 16 * 1024; // 16KB chunks
+        for (let i = 0; i < audioBuffer.length; i += chunkSize) {
+          yield {
+            AudioEvent: {
+              AudioChunk: audioBuffer.slice(i, i + chunkSize)
+            }
+          };
         }
+      })();
+
+      const command = new StartStreamTranscriptionCommand({
+        LanguageCode: language,
+        MediaEncoding: 'pcm', // Default to PCM
+        MediaSampleRateHertz: 16000,
+        AudioStream: audioStream
       });
 
-      await this.transcribeClient.send(startCommand);
+      const response = await this.transcribeStreamingClient.send(command);
 
-      // Poll for completion
-      const transcription = await this.pollTranscriptionJob(jobName);
+      let finalTranscript = '';
+      let confidenceSum = 0;
+      let wordCount = 0;
 
+      if (response.TranscriptResultStream) {
+        for await (const event of response.TranscriptResultStream) {
+          if (event.TranscriptEvent) {
+            const results = event.TranscriptEvent.Transcript?.Results;
+            if (results && results.length > 0) {
+              const result = results[0];
+              if (!result.IsPartial && result.Alternatives && result.Alternatives.length > 0) {
+                const alt = result.Alternatives[0];
+                finalTranscript += (alt.Transcript || '') + ' ';
+
+                if (alt.Items) {
+                  for (const item of alt.Items) {
+                    if (item.Confidence != null) {
+                      confidenceSum += item.Confidence;
+                      wordCount++;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      const averageConfidence = wordCount > 0 ? confidenceSum / wordCount : 0;
       const processingTimeMs = Date.now() - startTime;
+      const audioLengthSeconds = audioBuffer.length / 32000;
+
+      let requiresConfirmation = false;
+      let message;
+
+      // ── P2-3: Voice STT Language Validation ──
+      if (averageConfidence > 0 && averageConfidence < 0.75) {
+        requiresConfirmation = true;
+        message = "Could not clearly hear. Please confirm or re-record.";
+
+        // Note: Bengali, Kannada, and Telugu have known accuracy limitations in rural dialects.
+        // Run quarterly benchmarks against a labelled audio corpus.
+        try {
+          await this.cwClient.send(new PutMetricDataCommand({
+            Namespace: 'ASHA-Triage',
+            MetricData: [{
+              MetricName: 'stt_low_confidence_count',
+              Value: 1,
+              Unit: 'Count',
+              Dimensions: [{ Name: 'LanguageCode', Value: language }]
+            }]
+          }));
+        } catch (e) {
+          logger.error('Failed to emit stt_low_confidence_count metric', e as Error);
+        }
+      }
 
       logger.info('Transcription completed', {
-        jobName,
         language,
-        processingTimeMs
+        processingTimeMs,
+        averageConfidence
       });
 
       return {
-        transcription: transcription.text,
-        confidence: transcription.confidence,
+        transcription: finalTranscript.trim() || 'No speech detected',
+        confidence: averageConfidence,
         detectedLanguage: language,
         processingTimeMs,
-        audioLengthSeconds: transcription.duration
+        audioLengthSeconds,
+        requiresConfirmation,
+        message
       };
 
     } catch (error) {
-      logger.error('Transcription failed', error as Error, { audioS3Uri, language });
+      logger.error('Transcription failed', error as Error, { language });
       throw new VoiceProcessingError(
         'speech_to_text',
-        { audioS3Uri, language, error: (error as Error).message }
+        { language, error: (error as Error).message }
       );
-    } finally {
-      // ── P1-5: Delete audio file from S3 after transcription (success or failure) ──
-      // Medical audio must not persist beyond its processing lifecycle.
-      await this.deleteAudioFile(audioS3Uri);
     }
-  }
-
-  /**
-   * Poll transcription job until complete
-   */
-  private async pollTranscriptionJob(
-    jobName: string,
-    maxAttempts: number = 30
-  ): Promise<{ text: string; confidence: number; duration: number }> {
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const getCommand = new GetTranscriptionJobCommand({
-        TranscriptionJobName: jobName
-      });
-
-      const response = await this.transcribeClient.send(getCommand);
-      const job = response.TranscriptionJob;
-
-      if (job?.TranscriptionJobStatus === 'COMPLETED') {
-        // Fetch transcript from S3 URI
-        const transcriptUri = job.Transcript?.TranscriptFileUri;
-        if (!transcriptUri) {
-          throw new Error('Transcript URI not found');
-        }
-
-        // In production, fetch from S3. For now, return placeholder
-        return {
-          text: 'Transcribed text placeholder',
-          confidence: 0.95,
-          duration: 10
-        };
-      }
-
-      if (job?.TranscriptionJobStatus === 'FAILED') {
-        throw new Error(`Transcription job failed: ${job.FailureReason}`);
-      }
-
-      // Wait before next poll
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-
-    throw new Error('Transcription job timeout');
   }
 
   /**
@@ -217,52 +225,7 @@ export class VoiceService {
     return Buffer.concat(chunks);
   }
 
-  /**
-   * Detect language from audio (simplified version)
-   * In production, use Transcribe's automatic language detection
-   */
-  async detectLanguage(audioS3Uri: string): Promise<SupportedLanguage> {
-    // Placeholder implementation
-    // In production, use Transcribe with IdentifyLanguage option
-    logger.debug('Language detection requested', { audioS3Uri });
-    return 'hi-IN';
-  }
 
-  /**
-   * ── P1-5: Delete audio file from S3 after transcription ──
-   * Medical audio must not persist beyond its processing lifecycle.
-   * Parses the S3 URI (s3://bucket/key) and issues a DeleteObject call.
-   * Deletion failure is logged but does NOT block the response.
-   */
-  private async deleteAudioFile(audioS3Uri: string): Promise<void> {
-    try {
-      // Parse s3://bucket/key format
-      const s3Match = audioS3Uri.match(/^s3:\/\/([^\/]+)\/(.+)$/);
-      if (!s3Match) {
-        logger.warn('P1-5: Cannot parse S3 URI for deletion', { audioS3Uri });
-        return;
-      }
-
-      const [, bucket, key] = s3Match;
-
-      await this.s3Client.send(
-        new DeleteObjectCommand({
-          Bucket: bucket,
-          Key: key
-        })
-      );
-
-      logger.info('P1-5: Audio file deleted from S3 after transcription', {
-        bucket,
-        key
-      });
-    } catch (error) {
-      // Deletion failure must NOT block the triage response
-      logger.error('P1-5: Failed to delete audio file from S3', error as Error, {
-        audioS3Uri
-      });
-    }
-  }
 }
 
 /**

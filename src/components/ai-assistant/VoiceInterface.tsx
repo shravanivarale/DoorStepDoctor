@@ -21,7 +21,7 @@ const VoiceInterface: React.FC<Props> = ({ user, lowBandwidthMode }) => {
   const [selectedLanguage, setSelectedLanguage] = useState('en-IN');
   const [isProcessing, setIsProcessing] = useState(false);
   const [textInput, setTextInput] = useState('');
-  
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -86,23 +86,47 @@ const VoiceInterface: React.FC<Props> = ({ user, lowBandwidthMode }) => {
 
   const processVoiceInput = async (audioBlob: Blob) => {
     setIsProcessing(true);
-    
+
     // Simulate speech-to-text processing
     setTimeout(() => {
-      const simulatedTranscription = "I have been having headaches for the past few days. Should I be worried?";
-      
+      // Simulated response from backend
+      const mockBackendResponse = {
+        transcription: "I have been having headaches for the past few days. Should I be worried?",
+        confidence: Math.random(), // Simulate variable confidence
+        requiresConfirmation: false,
+        message: ""
+      };
+
+      if (mockBackendResponse.confidence < 0.75) {
+        mockBackendResponse.requiresConfirmation = true;
+        mockBackendResponse.message = "Could not clearly hear. Please confirm or re-record.";
+      }
+
+      if (mockBackendResponse.requiresConfirmation) {
+        const aiMessage: AIMessage = {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: mockBackendResponse.message,
+          timestamp: new Date(),
+          urgencyLevel: 'low'
+        };
+        setMessages(prev => [...prev, aiMessage]);
+        setIsProcessing(false);
+        return;
+      }
+
       const userMessage: AIMessage = {
         id: Date.now().toString(),
         role: 'user',
-        content: simulatedTranscription,
+        content: mockBackendResponse.transcription,
         timestamp: new Date()
       };
-      
+
       setMessages(prev => [...prev, userMessage]);
-      
+
       // Simulate AI processing and response
       setTimeout(() => {
-        generateAIResponse(simulatedTranscription);
+        generateAIResponse(mockBackendResponse.transcription);
       }, 1000);
     }, 2000);
   };
@@ -111,7 +135,7 @@ const VoiceInterface: React.FC<Props> = ({ user, lowBandwidthMode }) => {
     // Simulate AI response based on input
     let response = '';
     let urgencyLevel: 'low' | 'medium' | 'high' | 'emergency' = 'low';
-    
+
     if (userInput.toLowerCase().includes('headache')) {
       response = 'Headaches can have various causes. If they persist for more than a few days or are severe, I recommend consulting a doctor. In the meantime, ensure you\'re staying hydrated, getting enough rest, and managing stress. If you experience sudden severe headaches, vision changes, or fever, please seek immediate medical attention.';
       urgencyLevel = 'medium';
@@ -132,12 +156,12 @@ const VoiceInterface: React.FC<Props> = ({ user, lowBandwidthMode }) => {
     };
 
     setMessages(prev => [...prev, aiMessage]);
-    
+
     // Simulate text-to-speech
     if (!lowBandwidthMode) {
       playAudioResponse(response);
     }
-    
+
     setIsProcessing(false);
   };
 
@@ -167,7 +191,7 @@ const VoiceInterface: React.FC<Props> = ({ user, lowBandwidthMode }) => {
         content: textInput,
         timestamp: new Date()
       };
-      
+
       setMessages(prev => [...prev, userMessage]);
       generateAIResponse(textInput);
       setTextInput('');
@@ -214,7 +238,7 @@ const VoiceInterface: React.FC<Props> = ({ user, lowBandwidthMode }) => {
             )}
           </div>
         </div>
-        
+
         {/* Language Selection */}
         <div className="mb-4">
           <label className="block text-sm font-medium mb-2">Select Language:</label>
@@ -238,7 +262,7 @@ const VoiceInterface: React.FC<Props> = ({ user, lowBandwidthMode }) => {
             <div>
               <h3 className="font-bold text-yellow-800">Important Medical Disclaimer</h3>
               <p className="text-yellow-700 text-sm">
-                This AI assistant provides general health information only and cannot diagnose medical conditions. 
+                This AI assistant provides general health information only and cannot diagnose medical conditions.
                 Always consult qualified healthcare professionals for medical advice, diagnosis, or treatment.
               </p>
             </div>
@@ -251,16 +275,15 @@ const VoiceInterface: React.FC<Props> = ({ user, lowBandwidthMode }) => {
         <div className="lg:col-span-2">
           <div className="card">
             <h2 className="text-xl font-bold mb-4">Voice Interaction</h2>
-            
+
             {!lowBandwidthMode ? (
               <div className="text-center mb-6">
                 <div className="mb-4">
-                  <div 
-                    className={`inline-flex items-center justify-center w-24 h-24 rounded-full transition-all duration-300 ${
-                      isRecording 
-                        ? 'bg-red-500 animate-pulse' 
+                  <div
+                    className={`inline-flex items-center justify-center w-24 h-24 rounded-full transition-all duration-300 ${isRecording
+                        ? 'bg-red-500 animate-pulse'
                         : 'bg-blue-500 hover:bg-blue-600'
-                    }`}
+                      }`}
                   >
                     <button
                       onClick={isRecording ? stopRecording : startRecording}
@@ -271,11 +294,11 @@ const VoiceInterface: React.FC<Props> = ({ user, lowBandwidthMode }) => {
                     </button>
                   </div>
                 </div>
-                
+
                 <p className="text-lg font-medium mb-2">
                   {isRecording ? 'Listening...' : isProcessing ? 'Processing...' : 'Tap to speak'}
                 </p>
-                
+
                 <div className="flex justify-center gap-4">
                   <button
                     onClick={isPlaying ? stopAudio : undefined}
@@ -321,7 +344,7 @@ const VoiceInterface: React.FC<Props> = ({ user, lowBandwidthMode }) => {
             <MessageCircle className="text-blue-600" size={24} />
             <h2 className="text-xl font-bold">Conversation</h2>
           </div>
-          
+
           <div className="h-96 overflow-y-auto border rounded-lg p-4 bg-gray-50">
             {messages.map((message) => (
               <div
@@ -329,11 +352,10 @@ const VoiceInterface: React.FC<Props> = ({ user, lowBandwidthMode }) => {
                 className={`mb-4 ${message.role === 'user' ? 'text-right' : 'text-left'}`}
               >
                 <div
-                  className={`inline-block max-w-full px-4 py-2 rounded-lg ${
-                    message.role === 'user'
+                  className={`inline-block max-w-full px-4 py-2 rounded-lg ${message.role === 'user'
                       ? 'bg-blue-600 text-white'
                       : 'bg-white border'
-                  }`}
+                    }`}
                 >
                   {message.role === 'assistant' && message.urgencyLevel && (
                     <div className={`flex items-center gap-1 mb-2 px-2 py-1 rounded text-xs ${getUrgencyColor(message.urgencyLevel)}`}>
@@ -366,22 +388,22 @@ const VoiceInterface: React.FC<Props> = ({ user, lowBandwidthMode }) => {
       <div className="card">
         <h2 className="text-xl font-bold mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button 
+          <button
             onClick={() => setTextInput("I need to speak with a doctor")}
             className="button bg-green-600 flex items-center gap-2"
           >
             <Phone size={20} />
             Connect to Doctor
           </button>
-          
-          <button 
+
+          <button
             onClick={() => setTextInput("What are the symptoms of fever?")}
             className="button secondary"
           >
             Common Symptoms
           </button>
-          
-          <button 
+
+          <button
             onClick={() => setTextInput("First aid for minor cuts")}
             className="button secondary"
           >

@@ -118,6 +118,20 @@ Resources:
           LoggingLevel: INFO
           DataTraceEnabled: true
           MetricsEnabled: true
+          ThrottlingBurstLimit: 200
+          ThrottlingRateLimit: 100
+        - ResourcePath: '~1triage'
+          HttpMethod: 'POST'
+          ThrottlingBurstLimit: 1000
+          ThrottlingRateLimit: 500
+        - ResourcePath: '~1emergency~1cases'
+          HttpMethod: 'GET'
+          ThrottlingBurstLimit: 1000
+          ThrottlingRateLimit: 500
+        - ResourcePath: '~1emergency~1accept'
+          HttpMethod: 'POST'
+          ThrottlingBurstLimit: 1000
+          ThrottlingRateLimit: 500
 
   # DynamoDB Tables
   TriageTable:
@@ -125,6 +139,8 @@ Resources:
     Properties:
       TableName: !Sub ${AWS::StackName}-triage-records
       BillingMode: PAY_PER_REQUEST
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
       AttributeDefinitions:
         - AttributeName: triageId
           AttributeType: S
@@ -230,6 +246,24 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  ResponseCacheTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-response-cache
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: cacheKey
+          AttributeType: S
+      KeySchema:
+        - AttributeName: cacheKey
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
   # P0-6: PHC Directory Table
   PhcDirectoryTable:
     Type: AWS::DynamoDB::Table
@@ -272,6 +306,30 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # P2-1: Dead Letter Queue for Analytics Writes
+  AshaAnalyticsDlq:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${AWS::StackName}-analytics-dlq
+      MessageRetentionPeriod: 1209600 # 14 days in seconds
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  AnalyticsDlqPolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref AshaAnalyticsDlq
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sqs.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt AshaAnalyticsDlq.Arn
+
   # Lambda Functions
   TriageFunction:
     Type: AWS::Serverless::Function
@@ -280,6 +338,7 @@ Resources:
       CodeUri: ./dist
       Handler: handlers/triage.handler.handler
       Description: Main triage processing function
+      MemorySize: 384
       Environment:
         Variables:
           BEDROCK_MODEL_ID: !Ref BedrockModelId
@@ -326,6 +385,7 @@ Resources:
       CodeUri: ./dist
       Handler: handlers/auth.handler.loginHandler
       Description: User login function
+      MemorySize: 128
       Environment:
         Variables:
           COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
@@ -354,6 +414,7 @@ Resources:
       CodeUri: ./dist
       Handler: handlers/auth.handler.registerHandler
       Description: User registration function
+      MemorySize: 128
       Environment:
         Variables:
           COGNITO_USER_POOL_ID: !Ref CognitoUserPoolId
@@ -381,6 +442,7 @@ Resources:
       CodeUri: ./dist
       Handler: handlers/voice.handler.speechToTextHandler
       Description: Speech-to-text function
+      MemorySize: 256
       Timeout: 60
       Environment:
         Variables:
@@ -413,6 +475,7 @@ Resources:
       CodeUri: ./dist
       Handler: handlers/voice.handler.textToSpeechHandler
       Description: Text-to-speech function
+      MemorySize: 256
       Environment:
         Variables:
           POLLY_VOICE_ID: 'Aditi'
@@ -439,6 +502,7 @@ Resources:
       CodeUri: ./dist
       Handler: handlers/emergency.handler.getEmergencyCasesHandler
       Description: Emergency case management function
+      MemorySize: 256
       Environment:
         Variables:
           DYNAMODB_EMERGENCY_TABLE: !Ref EmergencyTable
@@ -461,6 +525,7 @@ Resources:
       CodeUri: ./dist
       Handler: handlers/emergency.handler.updateEmergencyStatusHandler
       Description: Emergency case acceptance and status update function
+      MemorySize: 128
       Environment:
         Variables:
           DYNAMODB_EMERGENCY_TABLE: !Ref EmergencyTable
@@ -483,6 +548,7 @@ Resources:
       CodeUri: ./dist
       Handler: handlers/escalation-checker.handler.handler
       Description: Checks for unacknowledged emergency cases and escalates via SMS
+      MemorySize: 128
       Timeout: 60
       Environment:
         Variables:
@@ -512,6 +578,88 @@ Resources:
             Schedule: rate(2 minutes)
             Description: Check for unacknowledged emergency cases every 2 minutes
             Enabled: true
+
+  # P2-2: OpenSearch Cold-Start Warm Ping
+  KBWarmingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-kb-warming
+      CodeUri: ./dist
+      Handler: handlers/kb-warming.handler.handler
+      Description: Scheduled function to prevent OpenSearch cold starts
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          BEDROCK_KNOWLEDGE_BASE_ID: !Ref BedrockKnowledgeBaseId
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:Retrieve
+              Resource: !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/${BedrockKnowledgeBaseId}
+        - CloudWatchPutMetricPolicy: {}
+      Events:
+        ScheduledWarmPing:
+          Type: Schedule
+          Properties:
+            Schedule: rate(4 hours)
+            Description: Ping Bedrock KB every 4 hours to keep OpenSearch warm
+            Enabled: true
+
+  # Missing from previous codebase: Analytics Function (P2-1 / P2-7 / P3-4)
+  AnalyticsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-analytics
+      CodeUri: ./dist
+      Handler: handlers/analytics.handler.getAnalyticsHandler
+      Description: API handler for analytics reporting
+      MemorySize: 128
+      Environment:
+        Variables:
+          DYNAMODB_ANALYTICS_TABLE: !Ref AnalyticsTable
+
+  # P3-2: Stream Processor for Analytics
+  StreamProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-stream-processor
+      CodeUri: ./dist
+      Handler: handlers/stream-processor.handler.handler
+      Description: Processes TriageTable streams and updates aggregated analytics
+      MemorySize: 256
+      Environment:
+        Variables:
+          DYNAMODB_ANALYTICS_TABLE: !Ref AnalyticsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AnalyticsTable
+      Events:
+        Stream:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt TriageTable.StreamArn
+            StartingPosition: TRIM_HORIZON
+            BatchSize: 100
+            MaximumBatchingWindowInSeconds: 60
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref AnalyticsTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt AshaAnalyticsDlq.QueueName
+      EventInvokeConfig:
+        DestinationConfig:
+          OnFailure:
+            Type: SQS
+            Destination: !GetAtt AshaAnalyticsDlq.Arn
+      Events:
+        GetAnalytics:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TriageApi
+            Path: /analytics
+            Method: GET
 
   # CloudWatch Log Groups
   TriageFunctionLogGroup:
@@ -607,6 +755,24 @@ Resources:
       Period: 1800
       EvaluationPeriods: 1
       Threshold: 20
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  # P2-1: DLQ Depth Alarm
+  AshaAnalyticsDlqDepthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-analytics-dlq-depth
+      AlarmDescription: Alert when the Analytics DLQ has more than 10 messages. Indicates failed analytics writes.
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt AshaAnalyticsDlq.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 10
       ComparisonOperator: GreaterThanThreshold
       TreatMissingData: notBreaching
 

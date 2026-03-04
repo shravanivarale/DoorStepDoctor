@@ -39,6 +39,9 @@ import {
   TriageResponseSchema,
   RAGContext
 } from '../types/triage.types';
+import { estimateTokens } from '../utils/token-counter';
+import { buildCacheKey } from '../utils/cache-key';
+import { dynamoDBService } from './dynamodb.service';
 
 /**
  * Static safe fallback response used when:
@@ -103,12 +106,49 @@ export class BedrockService {
       const retrievalTimeMs = Date.now() - startTime;
 
       // Extract and format retrieved documents
-      const retrievedDocuments = (response.retrievalResults || []).map(result => ({
+      let retrievedDocuments = (response.retrievalResults || []).map(result => ({
         documentId: result.location?.s3Location?.uri || 'unknown',
         title: String(result.metadata?.title || 'Medical Protocol'),
         excerpt: result.content?.text || '',
         relevanceScore: result.score || 0
       }));
+
+      // ── P2-5 Input Token Budget Enforcement ──
+      const systemPromptTokens = estimateTokens(this.getSystemPrompt());
+      const queryTokens = estimateTokens(query);
+      const MAX_TOKENS = 1800; // Haiku optimal input size for this pipeline
+
+      let currentTokens = systemPromptTokens + queryTokens;
+      const initialDocCount = retrievedDocuments.length;
+      const documentsToKeep = [];
+
+      for (const doc of retrievedDocuments) {
+        const docTokens = estimateTokens(doc.excerpt);
+        if (currentTokens + docTokens > MAX_TOKENS) {
+          break;
+        }
+        currentTokens += docTokens;
+        documentsToKeep.push(doc);
+      }
+
+      if (documentsToKeep.length < initialDocCount) {
+        // Emit context truncation event
+        await this.emitMetric('context_truncation_events', 1);
+        logger.warn('P2-5: Token budget exceeded, truncated KB context', {
+          originalDocs: initialDocCount,
+          keptDocs: documentsToKeep.length,
+          tokens: currentTokens
+        });
+      }
+
+      if (documentsToKeep.length === 0 && retrievedDocuments.length > 0) {
+        logger.error('P2-5: Token budget exceeded but could not include even a single document', new Error('Token Budget Exceeded'), {
+          queryTokens,
+          systemPromptTokens
+        });
+      }
+
+      retrievedDocuments = documentsToKeep;
 
       logger.info('Knowledge Base retrieval successful', {
         documentsRetrieved: retrievedDocuments.length,
@@ -145,6 +185,18 @@ export class BedrockService {
     const startTime = Date.now();
 
     try {
+      // ── P2-6: Check Semantic Cache ──
+      const cacheKey = buildCacheKey(request.symptoms, request.patientAge, request.patientGender);
+      const cachedResponse = await dynamoDBService.getCachedResponse(cacheKey);
+
+      if (cachedResponse) {
+        await this.emitMetric('cache_hit_count', 1);
+        logger.info('P2-6: Semantic Cache Hit', { cacheKey });
+        return cachedResponse as TriageResponse;
+      }
+
+      await this.emitMetric('cache_miss_count', 1);
+
       // Build context from retrieved documents
       const contextText = this.buildContextFromDocuments(ragContext);
 
@@ -179,7 +231,34 @@ export class BedrockService {
       };
 
       const command = new InvokeModelCommand(input);
-      const response = await this.runtimeClient.send(command);
+      let response;
+      let attempt = 0;
+      const MAX_RETRIES = 3;
+      const delays = [200, 600, 1500];
+
+      while (true) {
+        try {
+          response = await this.runtimeClient.send(command);
+          break; // Success
+        } catch (error: any) {
+          const isRetryable =
+            error.name === 'ThrottlingException' ||
+            error.name === 'ModelErrorException' ||
+            error.name === 'ServiceUnavailableException';
+
+          if (isRetryable && attempt < MAX_RETRIES) {
+            logger.warn(`Bedrock invocation failed, retrying (${attempt + 1}/${MAX_RETRIES})`, {
+              errorName: error.name,
+              symptoms: request.symptoms
+            });
+            const jitter = Math.random() * 50;
+            await new Promise(resolve => setTimeout(resolve, delays[attempt] + jitter));
+            attempt++;
+          } else {
+            throw error;
+          }
+        }
+      }
 
       // Parse response
       const responseData = JSON.parse(new TextDecoder().decode(response.body));
@@ -207,12 +286,16 @@ export class BedrockService {
         request
       );
 
-      const processingTimeMs = Date.now() - startTime;
-
       logger.logPerformance('bedrock_inference', processingTimeMs, {
-        tokensUsed: responseBody.usage?.total_tokens || 0,
+        tokensUsed: responseData.usage?.total_tokens || 0,
         modelId: config.bedrock.modelId
       });
+
+      // ── P2-6: Save to Semantic Cache ──
+      if (triageResponse.urgencyLevel !== 'emergency' && triageResponse.urgencyLevel !== 'high') {
+        await dynamoDBService.setCachedResponse(cacheKey, triageResponse, 6 * 60 * 60);
+        logger.info('P2-6: Semantic Cache Set', { cacheKey, urgencyLevel: triageResponse.urgencyLevel });
+      }
 
       return triageResponse;
 

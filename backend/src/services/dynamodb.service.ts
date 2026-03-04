@@ -503,6 +503,51 @@ export class DynamoDBService {
   }
 
   /**
+   * ── P2-6: Retrieve semantic cache response ──
+   */
+  async getCachedResponse(cacheKey: string): Promise<any | null> {
+    try {
+      const command = new GetItemCommand({
+        TableName: 'asha-response-cache',
+        Key: marshall({ cacheKey })
+      });
+      const response = await this.client.send(command);
+
+      if (!response.Item) return null;
+
+      const item = unmarshall(response.Item);
+      // Check if expired
+      if (item.expiresAt < Math.floor(Date.now() / 1000)) {
+        return null;
+      }
+      return item.response;
+    } catch (error) {
+      logger.warn('P2-6: Failed to retrieve cache', { cacheKey, error: (error as Error).message });
+      return null;
+    }
+  }
+
+  /**
+   * ── P2-6: Store semantic cache response ──
+   */
+  async setCachedResponse(cacheKey: string, response: any, ttlSeconds: number = 6 * 60 * 60): Promise<void> {
+    try {
+      const item = {
+        cacheKey,
+        response,
+        expiresAt: Math.floor(Date.now() / 1000) + ttlSeconds
+      };
+      const command = new PutItemCommand({
+        TableName: 'asha-response-cache',
+        Item: marshall(item, { removeUndefinedValues: true })
+      });
+      await this.client.send(command);
+    } catch (error) {
+      logger.warn('P2-6: Failed to store cache', { cacheKey, error: (error as Error).message });
+    }
+  }
+
+  /**
    * Helper: Chunk array into smaller batches
    */
   private chunkArray<T>(array: T[], size: number): T[][] {
