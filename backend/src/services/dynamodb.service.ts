@@ -14,7 +14,8 @@ import {
   GetItemCommand,
   QueryCommand,
   UpdateItemCommand,
-  BatchWriteItemCommand
+  BatchWriteItemCommand,
+  ScanCommand
 } from '@aws-sdk/client-dynamodb';
 import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
@@ -33,11 +34,11 @@ import {
  */
 export class DynamoDBService {
   private client: DynamoDBClient;
-  
+
   constructor() {
     this.client = new DynamoDBClient({ region: config.region });
   }
-  
+
   /**
    * Store triage result in DynamoDB
    * 
@@ -67,21 +68,21 @@ export class DynamoDBService {
         // TTL: 90 days for data retention
         ttl: Math.floor(Date.now() / 1000) + (90 * 24 * 60 * 60)
       };
-      
+
       const command = new PutItemCommand({
         TableName: config.dynamodb.triageTable,
         Item: marshall(item, { removeUndefinedValues: true })
       });
-      
+
       await this.client.send(command);
-      
+
       logger.info('Triage result stored', {
         triageId: triageResult.triageId,
         urgencyLevel: triageResult.response.urgencyLevel
       });
-      
+
       return triageResult.triageId;
-      
+
     } catch (error) {
       logger.error('Failed to store triage result', error as Error, {
         triageId: triageResult.triageId
@@ -92,7 +93,7 @@ export class DynamoDBService {
       });
     }
   }
-  
+
   /**
    * Retrieve triage result by ID
    * 
@@ -105,18 +106,18 @@ export class DynamoDBService {
         TableName: config.dynamodb.triageTable,
         Key: marshall({ triageId })
       });
-      
+
       const response = await this.client.send(command);
-      
+
       if (!response.Item) {
         return null;
       }
-      
+
       const item = unmarshall(response.Item);
-      
+
       // Reconstruct TriageResult from stored data
       return this.reconstructTriageResult(item);
-      
+
     } catch (error) {
       logger.error('Failed to retrieve triage result', error as Error, { triageId });
       throw new DatabaseError('get_triage', {
@@ -125,7 +126,7 @@ export class DynamoDBService {
       });
     }
   }
-  
+
   /**
    * Query triage history for a user
    * 
@@ -145,15 +146,15 @@ export class DynamoDBService {
         ScanIndexForward: false, // Most recent first
         Limit: limit
       });
-      
+
       const response = await this.client.send(command);
-      
+
       if (!response.Items || response.Items.length === 0) {
         return [];
       }
-      
+
       return response.Items.map(item => this.reconstructTriageResult(unmarshall(item)));
-      
+
     } catch (error) {
       logger.error('Failed to retrieve user triage history', error as Error, { userId });
       throw new DatabaseError('query_user_history', {
@@ -162,7 +163,7 @@ export class DynamoDBService {
       });
     }
   }
-  
+
   /**
    * Store emergency escalation case
    * 
@@ -181,25 +182,28 @@ export class DynamoDBService {
         referralNote: escalation.referralNote,
         timestamp: escalation.timestamp,
         notificationSent: escalation.notificationSent,
+        // ── P0-5: Notification tracking fields ──
+        notificationStatus: escalation.notificationStatus || 'pending_ack',
+        notifiedAt: escalation.notifiedAt || new Date().toISOString(),
         status: 'pending',
         // TTL: 180 days for emergency records
         ttl: Math.floor(Date.now() / 1000) + (180 * 24 * 60 * 60)
       };
-      
+
       const command = new PutItemCommand({
         TableName: config.dynamodb.emergencyTable,
         Item: marshall(item, { removeUndefinedValues: true })
       });
-      
+
       await this.client.send(command);
-      
+
       logger.logEmergencyEscalation(escalation.triageId, {
         emergencyId: item.emergencyId,
         location: escalation.location
       });
-      
+
       return item.emergencyId;
-      
+
     } catch (error) {
       logger.error('Failed to store emergency case', error as Error, {
         triageId: escalation.triageId
@@ -210,7 +214,7 @@ export class DynamoDBService {
       });
     }
   }
-  
+
   /**
    * Store analytics event for district health intelligence
    * 
@@ -232,19 +236,19 @@ export class DynamoDBService {
         // TTL: 365 days for analytics
         ttl: Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60)
       };
-      
+
       const command = new PutItemCommand({
         TableName: config.dynamodb.analyticsTable,
         Item: marshall(item, { removeUndefinedValues: true })
       });
-      
+
       await this.client.send(command);
-      
+
       logger.debug('Analytics event stored', {
         eventId: event.eventId,
         eventType: event.eventType
       });
-      
+
     } catch (error) {
       // Don't throw error for analytics failures - log and continue
       logger.warn('Failed to store analytics event', {
@@ -253,7 +257,7 @@ export class DynamoDBService {
       });
     }
   }
-  
+
   /**
    * Batch store multiple analytics events
    * 
@@ -277,22 +281,22 @@ export class DynamoDBService {
           }, { removeUndefinedValues: true })
         }
       }));
-      
+
       // DynamoDB batch write limit is 25 items
       const batches = this.chunkArray(writeRequests, 25);
-      
+
       for (const batch of batches) {
         const command = new BatchWriteItemCommand({
           RequestItems: {
             [config.dynamodb.analyticsTable]: batch
           }
         });
-        
+
         await this.client.send(command);
       }
-      
+
       logger.info('Batch analytics events stored', { count: events.length });
-      
+
     } catch (error) {
       logger.warn('Failed to batch store analytics events', {
         count: events.length,
@@ -300,7 +304,7 @@ export class DynamoDBService {
       });
     }
   }
-  
+
   /**
    * Query analytics events for district health intelligence
    * 
@@ -325,15 +329,15 @@ export class DynamoDBService {
           ':endDate': endDate.split('T')[0]
         })
       });
-      
+
       const response = await this.client.send(command);
-      
+
       if (!response.Items || response.Items.length === 0) {
         return [];
       }
-      
+
       return response.Items.map(item => unmarshall(item) as AnalyticsEvent);
-      
+
     } catch (error) {
       logger.error('Failed to query district analytics', error as Error, {
         district,
@@ -346,7 +350,7 @@ export class DynamoDBService {
       });
     }
   }
-  
+
   /**
    * Update emergency case status
    * 
@@ -370,11 +374,11 @@ export class DynamoDBService {
           ':updatedAt': new Date().toISOString()
         })
       });
-      
+
       await this.client.send(command);
-      
+
       logger.info('Emergency status updated', { emergencyId, status });
-      
+
     } catch (error) {
       logger.error('Failed to update emergency status', error as Error, {
         emergencyId,
@@ -386,7 +390,83 @@ export class DynamoDBService {
       });
     }
   }
-  
+
+  /**
+   * ── P0-5: Query emergency cases with pending_ack notification status ──
+   * Used by the EscalationCheckerFunction to find unacknowledged emergencies.
+   * 
+   * @param maxAgeMinutes - Only return cases older than this many minutes
+   * @returns Array of unacknowledged emergency cases
+   */
+  async queryPendingEmergencies(maxAgeMinutes: number = 5): Promise<any[]> {
+    try {
+      const cutoffTime = new Date(Date.now() - maxAgeMinutes * 60 * 1000).toISOString();
+
+      // Scan with filter for notificationStatus = pending_ack AND notifiedAt < cutoff
+      // In production with high volume, consider a GSI on notificationStatus + notifiedAt
+      const command = new ScanCommand({
+        TableName: config.dynamodb.emergencyTable,
+        FilterExpression:
+          'notificationStatus = :status AND notifiedAt < :cutoff',
+        ExpressionAttributeValues: marshall({
+          ':status': 'pending_ack',
+          ':cutoff': cutoffTime
+        })
+      });
+
+      const response = await this.client.send(command);
+
+      if (!response.Items || response.Items.length === 0) {
+        return [];
+      }
+
+      return response.Items.map(item => unmarshall(item));
+    } catch (error) {
+      logger.error('Failed to query pending emergencies', error as Error);
+      throw new DatabaseError('query_pending_emergencies', {
+        error: (error as Error).message
+      });
+    }
+  }
+
+  /**
+   * ── P0-5: Update notification status on an emergency case ──
+   * Used by the EscalationCheckerFunction and the /emergency/accept endpoint.
+   * 
+   * @param emergencyId - Emergency case ID
+   * @param notificationStatus - New notification status
+   */
+  async updateNotificationStatus(
+    emergencyId: string,
+    notificationStatus: 'pending_ack' | 'acknowledged' | 'escalated'
+  ): Promise<void> {
+    try {
+      const command = new UpdateItemCommand({
+        TableName: config.dynamodb.emergencyTable,
+        Key: marshall({ emergencyId }),
+        UpdateExpression:
+          'SET notificationStatus = :notifStatus, updatedAt = :updatedAt',
+        ExpressionAttributeValues: marshall({
+          ':notifStatus': notificationStatus,
+          ':updatedAt': new Date().toISOString()
+        })
+      });
+
+      await this.client.send(command);
+
+      logger.info('Notification status updated', { emergencyId, notificationStatus });
+    } catch (error) {
+      logger.error('Failed to update notification status', error as Error, {
+        emergencyId,
+        notificationStatus
+      });
+      throw new DatabaseError('update_notification_status', {
+        emergencyId,
+        error: (error as Error).message
+      });
+    }
+  }
+
   /**
    * Helper: Reconstruct TriageResult from DynamoDB item
    */
@@ -421,7 +501,7 @@ export class DynamoDBService {
       }
     };
   }
-  
+
   /**
    * Helper: Chunk array into smaller batches
    */

@@ -10,6 +10,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda
 import emergencyService from '../services/emergency.service';
 import dynamoDBService from '../services/dynamodb.service';
 import logger from '../utils/logger';
+import { validateToken } from '../utils/auth-validator';
 import { ValidationError } from '../utils/errors';
 import { APIResponse } from '../types/triage.types';
 
@@ -22,21 +23,24 @@ export async function getEmergencyCasesHandler(
 ): Promise<APIGatewayProxyResult> {
   const requestId = context.awsRequestId;
   logger.setContext({ requestId, handler: 'getEmergencyCases' });
-  
+
   try {
+    // ── P1-2: Independent JWT validation (defence-in-depth) ──
+    await validateToken(event);
+
     const district = event.queryStringParameters?.district;
     const status = event.queryStringParameters?.status || 'pending';
-    
+
     if (!district) {
       throw new ValidationError('district query parameter is required');
     }
-    
+
     logger.info('Fetching emergency cases', { district, status });
-    
+
     // In production, query DynamoDB for emergency cases by district
     // For now, return mock data
     const emergencyCases: any[] = [];
-    
+
     const response: APIResponse<any[]> = {
       success: true,
       data: emergencyCases,
@@ -46,7 +50,7 @@ export async function getEmergencyCasesHandler(
         processingTimeMs: 0
       }
     };
-    
+
     return {
       statusCode: 200,
       headers: {
@@ -56,7 +60,7 @@ export async function getEmergencyCasesHandler(
       },
       body: JSON.stringify(response)
     };
-    
+
   } catch (error) {
     logger.error('Failed to fetch emergency cases', error as Error, { requestId });
     return handleEmergencyError(error as Error, requestId);
@@ -74,26 +78,35 @@ export async function updateEmergencyStatusHandler(
 ): Promise<APIGatewayProxyResult> {
   const requestId = context.awsRequestId;
   logger.setContext({ requestId, handler: 'updateEmergencyStatus' });
-  
+
   try {
+    // ── P1-2: Independent JWT validation (defence-in-depth) ──
+    await validateToken(event);
+
     if (!event.body) {
       throw new ValidationError('Request body is required');
     }
-    
+
     const { emergencyId, status } = JSON.parse(event.body);
-    
+
     if (!emergencyId || !status) {
       throw new ValidationError('emergencyId and status are required');
     }
-    
+
     if (!['pending', 'acknowledged', 'resolved'].includes(status)) {
       throw new ValidationError('Invalid status value');
     }
-    
+
     logger.info('Updating emergency status', { emergencyId, status });
-    
+
     await dynamoDBService.updateEmergencyStatus(emergencyId, status);
-    
+
+    // ── P0-5: When a PHC doctor acknowledges a case, update notification status ──
+    // This prevents the EscalationCheckerFunction from escalating further.
+    if (status === 'acknowledged') {
+      await dynamoDBService.updateNotificationStatus(emergencyId, 'acknowledged');
+    }
+
     const response: APIResponse<{ message: string }> = {
       success: true,
       data: { message: 'Emergency status updated successfully' },
@@ -103,7 +116,7 @@ export async function updateEmergencyStatusHandler(
         processingTimeMs: 0
       }
     };
-    
+
     return {
       statusCode: 200,
       headers: {
@@ -113,7 +126,7 @@ export async function updateEmergencyStatusHandler(
       },
       body: JSON.stringify(response)
     };
-    
+
   } catch (error) {
     logger.error('Failed to update emergency status', error as Error, { requestId });
     return handleEmergencyError(error as Error, requestId);
@@ -131,10 +144,10 @@ export async function getEmergencyContactHandler(
 ): Promise<APIGatewayProxyResult> {
   const requestId = context.awsRequestId;
   logger.setContext({ requestId, handler: 'getEmergencyContact' });
-  
+
   try {
     const emergencyContact = emergencyService.getEmergencyContact();
-    
+
     const response: APIResponse<{ contact: string }> = {
       success: true,
       data: { contact: emergencyContact },
@@ -144,7 +157,7 @@ export async function getEmergencyContactHandler(
         processingTimeMs: 0
       }
     };
-    
+
     return {
       statusCode: 200,
       headers: {
@@ -154,7 +167,7 @@ export async function getEmergencyContactHandler(
       },
       body: JSON.stringify(response)
     };
-    
+
   } catch (error) {
     logger.error('Failed to get emergency contact', error as Error, { requestId });
     return handleEmergencyError(error as Error, requestId);
@@ -170,13 +183,13 @@ function handleEmergencyError(error: Error, requestId: string): APIGatewayProxyR
   let statusCode = 500;
   let errorCode = 'INTERNAL_ERROR';
   let errorMessage = 'An unexpected error occurred';
-  
+
   if (error instanceof ValidationError) {
     statusCode = 400;
     errorCode = 'VALIDATION_ERROR';
     errorMessage = error.message;
   }
-  
+
   const response: APIResponse<never> = {
     success: false,
     error: {
@@ -186,7 +199,7 @@ function handleEmergencyError(error: Error, requestId: string): APIGatewayProxyR
       requestId
     }
   };
-  
+
   return {
     statusCode,
     headers: {

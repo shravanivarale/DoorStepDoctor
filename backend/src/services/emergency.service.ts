@@ -3,33 +3,151 @@
  * 
  * Handles emergency case detection, PHC notification, and referral generation
  * for high-risk triage cases.
+ * 
+ * ── P0-3: Composite Risk Scoring ──
+ * riskScore is a COMPOSITE of two sources:
+ *   primaryScore  — extracted from Claude's JSON output (0.0–1.0)
+ *   keywordBoost  — +0.3 if ANY emergency keyword appears in symptom text
+ *   finalScore    = clamp(primaryScore + keywordBoost, 0.0, 1.0)
+ * If keywordBoost was applied, urgencyLevel is overridden to "critical"
+ * regardless of Claude's output. The keyword check is the safety net.
+ * 
+ * ── P0-5: Notification with Delivery Confirmation ──
+ * On emergency creation: notificationStatus = "pending_ack", notifiedAt = now
+ * Real SNS publish for PHC notification.
+ * 
+ * ── P0-6: Nearest PHC from DynamoDB ──
+ * Queries asha-phc-directory by district GSI, calculates Haversine distance,
+ * returns closest PHC. Falls back to { name: "District PHC Helpline", ... }.
  */
+
+import {
+  DynamoDBClient,
+  QueryCommand
+} from '@aws-sdk/client-dynamodb';
+import { marshall, unmarshall } from '@aws-sdk/util-dynamodb';
+import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
+import {
+  CloudWatchClient,
+  PutMetricDataCommand
+} from '@aws-sdk/client-cloudwatch';
 
 import dynamoDBService from './dynamodb.service';
 import config from '../config/aws.config';
 import logger from '../utils/logger';
 import {
   TriageResult,
+  TriageResponse,
   EmergencyEscalation
 } from '../types/triage.types';
 
 /**
- * PHC (Primary Health Center) information
+ * ── P0-3: Emergency keywords that trigger keywordBoost (+0.3) ──
+ * If ANY of these appear in the symptom string (case-insensitive),
+ * the urgencyLevel is overridden to "critical" and riskScore is boosted.
+ * This list is the clinical safety net — not a hint.
  */
-interface PHCInfo {
+const EMERGENCY_KEYWORDS = [
+  'chest pain',
+  'difficulty breathing',
+  'unconscious',
+  'not breathing',
+  'seizure',
+  'heavy bleeding',
+  'not responding',
+  'preterm labour',
+  'cord prolapse',
+  'snake bite',
+  'poisoning',
+  'choking'
+];
+
+/**
+ * PHC (Primary Health Center) information from DynamoDB
+ */
+interface PHCRecord {
+  phcId: string;
   name: string;
   district: string;
   state: string;
-  contact: string;
   latitude: number;
   longitude: number;
+  phoneNumber: string;
+  geohash?: string;
 }
 
 /**
  * Emergency Service Class
  */
 export class EmergencyService {
-  
+  private dynamoClient: DynamoDBClient;
+  private snsClient: SNSClient;
+  private cloudwatchClient: CloudWatchClient;
+
+  constructor() {
+    this.dynamoClient = new DynamoDBClient({ region: config.region });
+    this.snsClient = new SNSClient({ region: config.region });
+    this.cloudwatchClient = new CloudWatchClient({ region: config.region });
+  }
+
+  /**
+   * ── P0-3: Composite Risk Score Calculation ──
+   * 
+   * SCORING FORMULA:
+   *   primaryScore  = riskScore from Claude's JSON output (0.0–1.0)
+   *   keywordBoost  = +0.3 if ANY emergency keyword is found in symptoms
+   *   finalScore    = Math.min(1.0, Math.max(0.0, primaryScore + keywordBoost))
+   * 
+   * If keywordBoost was applied:
+   *   - urgencyLevel is overridden to "critical"
+   *   - This is a SAFETY OVERRIDE, not a suggestion
+   * 
+   * Both primaryScore and finalScore are logged to CloudWatch for drift monitoring.
+   * 
+   * @param response - The triage response from Claude (will be mutated)
+   * @param symptoms - Raw symptom string from the ASHA worker
+   * @returns The mutated response with composite score applied
+   */
+  applyCompositeRiskScore(
+    response: TriageResponse,
+    symptoms: string
+  ): TriageResponse {
+    const primaryScore = response.riskScore;
+    const keywordBoost = this.checkEmergencyKeywords(symptoms) ? 0.3 : 0;
+    const finalScore = Math.min(1.0, Math.max(0.0, primaryScore + keywordBoost));
+
+    response.riskScore = finalScore;
+
+    // If keyword boost was applied, override urgencyLevel to "critical"
+    // regardless of Claude's output. The keyword check IS the safety net.
+    if (keywordBoost > 0) {
+      response.urgencyLevel = 'critical';
+      response.referToPhc = true;
+
+      logger.warn('P0-3: Emergency keyword detected — overriding to critical', {
+        primaryScore,
+        keywordBoost,
+        finalScore,
+        symptoms
+      });
+    }
+
+    // Emit both scores to CloudWatch for drift monitoring
+    this.emitRiskScoreMetrics(primaryScore, finalScore).catch(() => {
+      // Non-blocking — metric failure must not affect triage
+    });
+
+    return response;
+  }
+
+  /**
+   * Check if symptoms contain any emergency keywords (P0-3)
+   */
+  private checkEmergencyKeywords(symptoms: string): boolean {
+    const lowerSymptoms = symptoms.toLowerCase();
+    return EMERGENCY_KEYWORDS.some(keyword => lowerSymptoms.includes(keyword));
+  }
+
   /**
    * Check if triage result requires emergency escalation
    * 
@@ -38,27 +156,30 @@ export class EmergencyService {
    */
   shouldEscalate(triageResult: TriageResult): boolean {
     const { response } = triageResult;
-    
-    // Emergency level always escalates
-    if (response.urgencyLevel === 'emergency') {
+
+    // Emergency or critical level always escalates
+    if (response.urgencyLevel === 'emergency' || response.urgencyLevel === 'critical') {
       return true;
     }
-    
+
     // High risk score triggers escalation
     if (response.riskScore >= config.emergency.autoEscalationThreshold) {
       return true;
     }
-    
+
     // Explicit PHC referral recommendation
     if (response.referToPhc && response.urgencyLevel === 'high') {
       return true;
     }
-    
+
     return false;
   }
-  
+
   /**
    * Process emergency escalation
+   * 
+   * ── P0-5: Sets notificationStatus = "pending_ack" and notifiedAt timestamp ──
+   * ── P0-6: Queries real PHC directory instead of mock data ──
    * 
    * @param triageResult - Triage assessment result
    * @returns Emergency escalation record
@@ -70,22 +191,24 @@ export class EmergencyService {
         urgencyLevel: triageResult.response.urgencyLevel,
         riskScore: triageResult.response.riskScore
       });
-      
-      // Find nearest PHC
+
+      // ── P0-6: Find nearest PHC from DynamoDB directory ──
       const nearestPhc = await this.findNearestPHC(
         triageResult.request.location?.district || 'unknown',
         triageResult.request.location?.state || 'unknown',
         triageResult.request.location?.latitude,
         triageResult.request.location?.longitude
       );
-      
+
       // Generate referral note
       const referralNote = this.generateReferralNote(triageResult);
-      
-      // Create emergency escalation record
+
+      const now = new Date().toISOString();
+
+      // ── P0-5: Create emergency record with notification tracking ──
       const escalation: EmergencyEscalation = {
         triageId: triageResult.triageId,
-        urgencyLevel: 'emergency',
+        urgencyLevel: triageResult.response.urgencyLevel === 'critical' ? 'critical' : 'emergency',
         patientInfo: {
           age: triageResult.request.patientAge,
           gender: triageResult.request.patientGender,
@@ -96,33 +219,36 @@ export class EmergencyService {
           state: triageResult.request.location?.state || 'unknown',
           coordinates: triageResult.request.location?.latitude && triageResult.request.location?.longitude
             ? {
-                latitude: triageResult.request.location.latitude,
-                longitude: triageResult.request.location.longitude
-              }
+              latitude: triageResult.request.location.latitude,
+              longitude: triageResult.request.location.longitude
+            }
             : undefined
         },
         nearestPhc,
         referralNote,
-        timestamp: new Date().toISOString(),
-        notificationSent: false
+        timestamp: now,
+        notificationSent: false,
+        notificationStatus: 'pending_ack',
+        notifiedAt: now
       };
-      
+
       // Store emergency case in DynamoDB
       const emergencyId = await dynamoDBService.storeEmergencyCase(escalation);
-      
-      // Send notification to PHC (if enabled)
+
+      // ── P0-5: Send real SNS notification to PHC ──
       if (config.emergency.phcNotificationEnabled) {
         await this.notifyPHC(escalation, emergencyId);
       }
-      
+
       logger.logEmergencyEscalation(triageResult.triageId, {
         emergencyId,
         nearestPhc: nearestPhc.name,
+        notificationStatus: 'pending_ack',
         notificationSent: config.emergency.phcNotificationEnabled
       });
-      
+
       return escalation;
-      
+
     } catch (error) {
       logger.error('Emergency escalation failed', error as Error, {
         triageId: triageResult.triageId
@@ -130,9 +256,16 @@ export class EmergencyService {
       throw error;
     }
   }
-  
+
   /**
-   * Find nearest Primary Health Center
+   * ── P0-6: Find nearest PHC from DynamoDB asha-phc-directory table ──
+   * 
+   * Queries the asha-phc-directory table by district using the district-state-index GSI.
+   * Calculates straight-line distance using Haversine formula for each result.
+   * Returns the record with the shortest distance.
+   * 
+   * If no PHC found for district, returns safe fallback:
+   *   { name: "District PHC Helpline", phoneNumber: "104", distance: null }
    * 
    * @param district - Patient district
    * @param state - Patient state
@@ -145,41 +278,83 @@ export class EmergencyService {
     state: string,
     latitude?: number,
     longitude?: number
-  ): Promise<{ name: string; distance: number; contact: string }> {
-    // In production, query PHC database or use geospatial search
-    // For now, return mock data
-    
-    logger.debug('Finding nearest PHC', { district, state, latitude, longitude });
-    
-    // Mock PHC data
-    const mockPHCs: PHCInfo[] = [
-      {
-        name: 'District Primary Health Center',
-        district,
-        state,
-        contact: config.emergency.emergencyContactNumber,
-        latitude: latitude || 0,
-        longitude: longitude || 0
+  ): Promise<{ name: string; distance: number | null; contact: string }> {
+    try {
+      logger.debug('Finding nearest PHC from directory', { district, state, latitude, longitude });
+
+      const command = new QueryCommand({
+        TableName: config.dynamodb.phcDirectoryTable,
+        IndexName: 'district-state-index',
+        KeyConditionExpression: 'district = :district AND #state = :state',
+        ExpressionAttributeNames: {
+          '#state': 'state'
+        },
+        ExpressionAttributeValues: marshall({
+          ':district': district,
+          ':state': state
+        })
+      });
+
+      const response = await this.dynamoClient.send(command);
+
+      if (!response.Items || response.Items.length === 0) {
+        logger.warn('No PHC found in directory for district — returning fallback', {
+          district,
+          state
+        });
+        return {
+          name: 'District PHC Helpline',
+          distance: null,
+          contact: '104'
+        };
       }
-    ];
-    
-    // Calculate distance if coordinates provided
-    const distance = latitude && longitude ? this.calculateDistance(
-      latitude,
-      longitude,
-      mockPHCs[0].latitude,
-      mockPHCs[0].longitude
-    ) : 5.0;
-    
-    return {
-      name: mockPHCs[0].name,
-      distance,
-      contact: mockPHCs[0].contact
-    };
+
+      const phcRecords: PHCRecord[] = response.Items.map(item => unmarshall(item) as PHCRecord);
+
+      // If we have patient coordinates, calculate Haversine distance to each PHC
+      if (latitude && longitude) {
+        let nearest: PHCRecord = phcRecords[0];
+        let shortestDistance = this.calculateDistance(latitude, longitude, nearest.latitude, nearest.longitude);
+
+        for (let i = 1; i < phcRecords.length; i++) {
+          const dist = this.calculateDistance(latitude, longitude, phcRecords[i].latitude, phcRecords[i].longitude);
+          if (dist < shortestDistance) {
+            shortestDistance = dist;
+            nearest = phcRecords[i];
+          }
+        }
+
+        return {
+          name: nearest.name,
+          distance: Math.round(shortestDistance * 10) / 10, // Round to 1 decimal
+          contact: nearest.phoneNumber
+        };
+      }
+
+      // No coordinates — return first PHC in district with null distance
+      return {
+        name: phcRecords[0].name,
+        distance: null,
+        contact: phcRecords[0].phoneNumber
+      };
+
+    } catch (error) {
+      logger.error('PHC directory lookup failed — returning fallback', error as Error, {
+        district,
+        state
+      });
+      // Fallback: never let PHC lookup failure block emergency processing
+      return {
+        name: 'District PHC Helpline',
+        distance: null,
+        contact: '104'
+      };
+    }
   }
-  
+
   /**
    * Calculate distance between two coordinates (Haversine formula)
+   * Returns distance in kilometers
    */
   private calculateDistance(
     lat1: number,
@@ -190,25 +365,25 @@ export class EmergencyService {
     const R = 6371; // Earth's radius in km
     const dLat = this.toRadians(lat2 - lat1);
     const dLon = this.toRadians(lon2 - lon1);
-    
+
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(this.toRadians(lat1)) * Math.cos(this.toRadians(lat2)) *
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    
+      Math.cos(this.toRadians(lat1)) * Math.cos(this.toRadians(lat2)) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   }
-  
+
   private toRadians(degrees: number): number {
     return degrees * (Math.PI / 180);
   }
-  
+
   /**
    * Generate referral note for PHC doctor
    */
   private generateReferralNote(triageResult: TriageResult): string {
     const { request, response } = triageResult;
-    
+
     const note = `
 EMERGENCY REFERRAL NOTE
 Generated: ${new Date().toISOString()}
@@ -243,37 +418,63 @@ This is an AI-generated triage assessment. Please conduct a thorough clinical ev
 ASHA Worker ID: ${request.userId}
 Triage ID: ${triageResult.triageId}
 `;
-    
+
     return note.trim();
   }
-  
+
   /**
-   * Send notification to PHC dashboard
-   * In production, this would use SNS, SQS, or WebSocket
+   * ── P0-5: Send SNS notification to PHC ──
+   * Publishes emergency alert via SNS topic for PHC dashboard consumption.
    */
   private async notifyPHC(
     escalation: EmergencyEscalation,
     emergencyId: string
   ): Promise<void> {
     try {
-      logger.info('Sending PHC notification', {
+      logger.info('Sending PHC notification via SNS', {
         emergencyId,
         phc: escalation.nearestPhc.name
       });
-      
-      // In production:
-      // - Send SNS notification
-      // - Push to SQS queue for PHC dashboard
-      // - Send SMS to on-call doctor
-      // - Update WebSocket connections
-      
-      // For now, just log
-      logger.info('PHC notification sent', {
-        emergencyId,
-        phc: escalation.nearestPhc.name,
-        contact: escalation.nearestPhc.contact
-      });
-      
+
+      if (config.emergency.escalationSnsTopicArn) {
+        await this.snsClient.send(
+          new PublishCommand({
+            TopicArn: config.emergency.escalationSnsTopicArn,
+            Subject: `EMERGENCY: ${escalation.urgencyLevel.toUpperCase()} — ${escalation.location.district}`,
+            Message: JSON.stringify({
+              emergencyId,
+              triageId: escalation.triageId,
+              urgencyLevel: escalation.urgencyLevel,
+              district: escalation.location.district,
+              state: escalation.location.state,
+              symptoms: escalation.patientInfo.symptoms,
+              nearestPhc: escalation.nearestPhc.name,
+              timestamp: escalation.timestamp
+            }),
+            MessageAttributes: {
+              urgencyLevel: {
+                DataType: 'String',
+                StringValue: escalation.urgencyLevel
+              },
+              district: {
+                DataType: 'String',
+                StringValue: escalation.location.district
+              }
+            }
+          })
+        );
+
+        logger.info('PHC notification sent via SNS', {
+          emergencyId,
+          phc: escalation.nearestPhc.name,
+          topic: config.emergency.escalationSnsTopicArn
+        });
+      } else {
+        logger.warn('SNS topic ARN not configured — PHC notification skipped', {
+          emergencyId
+        });
+      }
+
     } catch (error) {
       logger.error('PHC notification failed', error as Error, {
         emergencyId
@@ -281,35 +482,51 @@ Triage ID: ${triageResult.triageId}
       // Don't throw - notification failure shouldn't block escalation
     }
   }
-  
+
   /**
    * Get emergency contact information
    */
   getEmergencyContact(): string {
     return config.emergency.emergencyContactNumber;
   }
-  
+
   /**
-   * Check if symptoms contain emergency keywords
+   * Check if symptoms contain emergency keywords (public API)
+   * Used by triage handler for quick pre-screening.
    */
   containsEmergencyKeywords(symptoms: string): boolean {
-    const emergencyKeywords = [
-      'chest pain',
-      'difficulty breathing',
-      'unconscious',
-      'severe bleeding',
-      'stroke',
-      'heart attack',
-      'seizure',
-      'poisoning',
-      'severe burn',
-      'head injury',
-      'suicide',
-      'overdose'
-    ];
-    
-    const lowerSymptoms = symptoms.toLowerCase();
-    return emergencyKeywords.some(keyword => lowerSymptoms.includes(keyword));
+    return this.checkEmergencyKeywords(symptoms);
+  }
+
+  /**
+   * Emit primaryScore and finalScore to CloudWatch for drift monitoring (P0-3)
+   */
+  private async emitRiskScoreMetrics(primaryScore: number, finalScore: number): Promise<void> {
+    try {
+      await this.cloudwatchClient.send(
+        new PutMetricDataCommand({
+          Namespace: config.cloudwatch.metricsNamespace,
+          MetricData: [
+            {
+              MetricName: 'risk_score_primary',
+              Value: primaryScore,
+              Unit: 'None',
+              Timestamp: new Date()
+            },
+            {
+              MetricName: 'risk_score_final',
+              Value: finalScore,
+              Unit: 'None',
+              Timestamp: new Date()
+            }
+          ]
+        })
+      );
+    } catch (error) {
+      logger.warn('Failed to emit risk score metrics', {
+        error: (error as Error).message
+      });
+    }
   }
 }
 

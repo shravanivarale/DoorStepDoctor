@@ -9,8 +9,11 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda
 import { v4 as uuidv4 } from 'uuid';
 
 import bedrockService from '../services/bedrock.service';
+import emergencyService from '../services/emergency.service';
 import dynamoDBService from '../services/dynamodb.service';
 import logger from '../utils/logger';
+import { sanitiseSymptomInput } from '../utils/sanitise';
+import { validateToken } from '../utils/auth-validator';
 import { ValidationError, BedrockError, DatabaseError } from '../utils/errors';
 import {
   TriageRequestSchema,
@@ -32,35 +35,44 @@ export async function handler(
 ): Promise<APIGatewayProxyResult> {
   const startTime = Date.now();
   const requestId = context.awsRequestId;
-  
+
   // Set logging context
   logger.setContext({ requestId, handler: 'triage' });
-  
+
   try {
     logger.info('Triage request received', {
       path: event.path,
       method: event.httpMethod
     });
-    
+
+    // ── P1-2: Independent JWT validation (defence-in-depth) ──
+    await validateToken(event);
+
     // Parse and validate request body
     if (!event.body) {
       throw new ValidationError('Request body is required');
     }
-    
+
     const requestBody = JSON.parse(event.body);
     const triageRequest = TriageRequestSchema.parse(requestBody);
-    
+
+    // ── P1-1: Sanitise symptom input against prompt injection ──
+    triageRequest.symptoms = sanitiseSymptomInput(triageRequest.symptoms);
+
     logger.info('Triage request validated', {
       userId: triageRequest.userId,
       language: triageRequest.language,
       voiceInput: triageRequest.voiceInput
     });
-    
+
     // Perform triage using Bedrock RAG pipeline
     const { response, ragContext, processingTimeMs } = await bedrockService.performTriage(
       triageRequest
     );
-    
+
+    // ── P0-3: Apply composite risk score with emergency keyword safety net ──
+    emergencyService.applyCompositeRiskScore(response, triageRequest.symptoms);
+
     // Create triage result
     const triageResult: TriageResult = {
       triageId: uuidv4(),
@@ -75,10 +87,10 @@ export async function handler(
         timestamp: new Date().toISOString()
       }
     };
-    
+
     // Store triage result in DynamoDB
     await dynamoDBService.storeTriageResult(triageResult);
-    
+
     // Store analytics event for district health intelligence
     const analyticsEvent: AnalyticsEvent = {
       eventId: uuidv4(),
@@ -90,28 +102,35 @@ export async function handler(
       timestamp: new Date().toISOString(),
       anonymized: true
     };
-    
+
     await dynamoDBService.storeAnalyticsEvent(analyticsEvent);
-    
-    // Handle emergency escalation if needed
-    if (response.urgencyLevel === 'emergency') {
+
+    // Handle emergency escalation if needed (P0-3 may have set urgencyLevel to 'critical')
+    if (response.urgencyLevel === 'emergency' || response.urgencyLevel === 'critical') {
       logger.logEmergencyEscalation(triageResult.triageId, {
         riskScore: response.riskScore,
         location: triageRequest.location
       });
-      
-      // Emergency escalation will be handled by a separate service
-      // For now, just log the event
+
+      // ── P0-5: Process emergency with notification tracking ──
+      try {
+        await emergencyService.processEmergency(triageResult);
+      } catch (escalationError) {
+        // Emergency escalation failure must not block the triage response
+        logger.error('Emergency escalation failed but triage continues', escalationError as Error, {
+          triageId: triageResult.triageId
+        });
+      }
     }
-    
+
     const totalProcessingTime = Date.now() - startTime;
-    
+
     logger.logPerformance('triage_complete', totalProcessingTime, {
       triageId: triageResult.triageId,
       urgencyLevel: response.urgencyLevel,
       riskScore: response.riskScore
     });
-    
+
     // Build API response
     const apiResponse: APIResponse<TriageResult> = {
       success: true,
@@ -122,7 +141,7 @@ export async function handler(
         processingTimeMs: totalProcessingTime
       }
     };
-    
+
     return {
       statusCode: 200,
       headers: {
@@ -132,10 +151,10 @@ export async function handler(
       },
       body: JSON.stringify(apiResponse)
     };
-    
+
   } catch (error) {
     logger.error('Triage request failed', error as Error, { requestId });
-    
+
     return handleError(error as Error, requestId);
   } finally {
     logger.clearContext();
@@ -149,7 +168,7 @@ function handleError(error: Error, requestId: string): APIGatewayProxyResult {
   let statusCode = 500;
   let errorCode = 'INTERNAL_ERROR';
   let errorMessage = 'An unexpected error occurred';
-  
+
   if (error instanceof ValidationError) {
     statusCode = 400;
     errorCode = 'VALIDATION_ERROR';
@@ -163,7 +182,7 @@ function handleError(error: Error, requestId: string): APIGatewayProxyResult {
     errorCode = 'DATABASE_ERROR';
     errorMessage = 'Database service temporarily unavailable';
   }
-  
+
   const apiResponse: APIResponse<never> = {
     success: false,
     error: {
@@ -173,7 +192,7 @@ function handleError(error: Error, requestId: string): APIGatewayProxyResult {
       requestId
     }
   };
-  
+
   return {
     statusCode,
     headers: {

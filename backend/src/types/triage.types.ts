@@ -14,7 +14,7 @@ import { z } from 'zod';
  * - high: Should be seen within hours
  * - emergency: Immediate medical attention required
  */
-export type UrgencyLevel = 'low' | 'medium' | 'high' | 'emergency';
+export type UrgencyLevel = 'low' | 'medium' | 'high' | 'emergency' | 'escalate' | 'critical';
 
 /**
  * User roles in the system
@@ -53,7 +53,7 @@ export type TriageRequest = z.infer<typeof TriageRequestSchema>;
  * Structured JSON output from Claude 3 Haiku via Bedrock
  */
 export const TriageResponseSchema = z.object({
-  urgencyLevel: z.enum(['low', 'medium', 'high', 'emergency']),
+  urgencyLevel: z.enum(['low', 'medium', 'high', 'emergency', 'escalate', 'critical']),
   riskScore: z.number().min(0).max(1),
   recommendedAction: z.string(),
   referToPhc: z.boolean(),
@@ -104,7 +104,7 @@ export interface KnowledgeDocument {
  */
 export interface EmergencyEscalation {
   triageId: string;
-  urgencyLevel: 'emergency';
+  urgencyLevel: 'emergency' | 'critical';
   patientInfo: {
     age?: number;
     gender?: string;
@@ -120,12 +120,14 @@ export interface EmergencyEscalation {
   };
   nearestPhc: {
     name: string;
-    distance: number;
+    distance: number | null;
     contact: string;
   };
   referralNote: string;
   timestamp: string;
   notificationSent: boolean;
+  notificationStatus: 'pending_ack' | 'acknowledged' | 'escalated';
+  notifiedAt: string;
 }
 
 /**

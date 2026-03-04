@@ -9,6 +9,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda
 
 import voiceService from '../services/voice.service';
 import logger from '../utils/logger';
+import { validateToken } from '../utils/auth-validator';
 import { ValidationError, VoiceProcessingError } from '../utils/errors';
 import { APIResponse, SupportedLanguage } from '../types/triage.types';
 
@@ -21,25 +22,28 @@ export async function speechToTextHandler(
 ): Promise<APIGatewayProxyResult> {
   const requestId = context.awsRequestId;
   logger.setContext({ requestId, handler: 'speechToText' });
-  
+
   try {
+    // ── P1-2: Independent JWT validation (defence-in-depth) ──
+    await validateToken(event);
+
     if (!event.body) {
       throw new ValidationError('Request body is required');
     }
-    
+
     const { audioS3Uri, language } = JSON.parse(event.body);
-    
+
     if (!audioS3Uri) {
       throw new ValidationError('audioS3Uri is required');
     }
-    
+
     logger.info('Speech-to-text request', { audioS3Uri, language });
-    
+
     const result = await voiceService.speechToText(
       audioS3Uri,
       language as SupportedLanguage || 'hi-IN'
     );
-    
+
     const response: APIResponse<typeof result> = {
       success: true,
       data: result,
@@ -49,7 +53,7 @@ export async function speechToTextHandler(
         processingTimeMs: result.processingTimeMs
       }
     };
-    
+
     return {
       statusCode: 200,
       headers: {
@@ -59,7 +63,7 @@ export async function speechToTextHandler(
       },
       body: JSON.stringify(response)
     };
-    
+
   } catch (error) {
     logger.error('Speech-to-text failed', error as Error, { requestId });
     return handleVoiceError(error as Error, requestId);
@@ -77,31 +81,34 @@ export async function textToSpeechHandler(
 ): Promise<APIGatewayProxyResult> {
   const requestId = context.awsRequestId;
   logger.setContext({ requestId, handler: 'textToSpeech' });
-  
+
   try {
+    // ── P1-2: Independent JWT validation (defence-in-depth) ──
+    await validateToken(event);
+
     if (!event.body) {
       throw new ValidationError('Request body is required');
     }
-    
+
     const { text, language } = JSON.parse(event.body);
-    
+
     if (!text) {
       throw new ValidationError('text is required');
     }
-    
+
     logger.info('Text-to-speech request', {
       textLength: text.length,
       language
     });
-    
+
     const audioBuffer = await voiceService.textToSpeech(
       text,
       language as SupportedLanguage || 'hi-IN'
     );
-    
+
     // Return audio as base64
     const audioBase64 = audioBuffer.toString('base64');
-    
+
     const response: APIResponse<{ audio: string; format: string }> = {
       success: true,
       data: {
@@ -114,7 +121,7 @@ export async function textToSpeechHandler(
         processingTimeMs: 0
       }
     };
-    
+
     return {
       statusCode: 200,
       headers: {
@@ -124,7 +131,7 @@ export async function textToSpeechHandler(
       },
       body: JSON.stringify(response)
     };
-    
+
   } catch (error) {
     logger.error('Text-to-speech failed', error as Error, { requestId });
     return handleVoiceError(error as Error, requestId);
@@ -142,22 +149,25 @@ export async function detectLanguageHandler(
 ): Promise<APIGatewayProxyResult> {
   const requestId = context.awsRequestId;
   logger.setContext({ requestId, handler: 'detectLanguage' });
-  
+
   try {
+    // ── P1-2: Independent JWT validation (defence-in-depth) ──
+    await validateToken(event);
+
     if (!event.body) {
       throw new ValidationError('Request body is required');
     }
-    
+
     const { audioS3Uri } = JSON.parse(event.body);
-    
+
     if (!audioS3Uri) {
       throw new ValidationError('audioS3Uri is required');
     }
-    
+
     logger.info('Language detection request', { audioS3Uri });
-    
+
     const detectedLanguage = await voiceService.detectLanguage(audioS3Uri);
-    
+
     const response: APIResponse<{ language: SupportedLanguage }> = {
       success: true,
       data: { language: detectedLanguage },
@@ -167,7 +177,7 @@ export async function detectLanguageHandler(
         processingTimeMs: 0
       }
     };
-    
+
     return {
       statusCode: 200,
       headers: {
@@ -177,7 +187,7 @@ export async function detectLanguageHandler(
       },
       body: JSON.stringify(response)
     };
-    
+
   } catch (error) {
     logger.error('Language detection failed', error as Error, { requestId });
     return handleVoiceError(error as Error, requestId);
@@ -193,7 +203,7 @@ function handleVoiceError(error: Error, requestId: string): APIGatewayProxyResul
   let statusCode = 500;
   let errorCode = 'INTERNAL_ERROR';
   let errorMessage = 'An unexpected error occurred';
-  
+
   if (error instanceof ValidationError) {
     statusCode = 400;
     errorCode = 'VALIDATION_ERROR';
@@ -203,7 +213,7 @@ function handleVoiceError(error: Error, requestId: string): APIGatewayProxyResul
     errorCode = 'VOICE_PROCESSING_ERROR';
     errorMessage = 'Voice service temporarily unavailable';
   }
-  
+
   const response: APIResponse<never> = {
     success: false,
     error: {
@@ -213,7 +223,7 @@ function handleVoiceError(error: Error, requestId: string): APIGatewayProxyResul
       requestId
     }
   };
-  
+
   return {
     statusCode,
     headers: {

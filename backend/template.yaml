@@ -22,6 +22,11 @@ Globals:
         EMERGENCY_CONTACT_NUMBER: '108'
         AUTO_ESCALATION_THRESHOLD: '0.8'
     Tracing: Active
+    # ── P1-6: VPC Isolation for all Lambda functions ──
+    # Restricts internet egress directly, forcing traffic through a NAT Gateway or VPC Endpoints
+    VpcConfig:
+      SecurityGroupIds: !Ref LambdaSecurityGroupIds
+      SubnetIds: !Ref LambdaSubnetIds
     Architectures:
       - arm64
 
@@ -62,7 +67,35 @@ Parameters:
     Default: asha-triage-storage
     Description: S3 bucket for voice recordings and documents
 
+  # P1-6: VPC Parameters
+  LambdaSecurityGroupIds:
+    Type: CommaDelimitedList
+    Description: List of Security Group IDs for Lambda functions
+  
+  LambdaSubnetIds:
+    Type: CommaDelimitedList
+    Description: List of Subnet IDs for Lambda functions
+
 Resources:
+  # ── P1-5: Medical Audio Lifecycle & Encryption ──
+  AudioStorageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref S3BucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: AutoDeleteAudio
+            Status: Enabled
+            ExpirationInDays: 1
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
   # API Gateway
   TriageApi:
     Type: AWS::Serverless::Api
@@ -134,6 +167,8 @@ Resources:
           AttributeType: S
         - AttributeName: timestamp
           AttributeType: S
+        - AttributeName: notificationStatus
+          AttributeType: S
       KeySchema:
         - AttributeName: emergencyId
           KeyType: HASH
@@ -142,6 +177,15 @@ Resources:
           KeySchema:
             - AttributeName: timestamp
               KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        # P0-5: GSI for querying by notification status
+        - IndexName: NotificationStatusIndex
+          KeySchema:
+            - AttributeName: notificationStatus
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
           Projection:
             ProjectionType: ALL
       TimeToLiveSpecification:
@@ -186,6 +230,48 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  # P0-6: PHC Directory Table
+  PhcDirectoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-phc-directory
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: phcId
+          AttributeType: S
+        - AttributeName: district
+          AttributeType: S
+        - AttributeName: state
+          AttributeType: S
+      KeySchema:
+        - AttributeName: phcId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: district-state-index
+          KeySchema:
+            - AttributeName: district
+              KeyType: HASH
+            - AttributeName: state
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: ASHA-Triage
+
+  # P0-5: SNS Topic for Emergency Escalation Alerts
+  EscalationSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub ${AWS::StackName}-escalation-alerts
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
   # Lambda Functions
   TriageFunction:
     Type: AWS::Serverless::Function
@@ -219,8 +305,11 @@ Resources:
             - Effect: Allow
               Action:
                 - bedrock:InvokeModel
+              Resource: !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/${BedrockModelId}
+            - Effect: Allow
+              Action:
                 - bedrock:Retrieve
-              Resource: '*'
+              Resource: !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:knowledge-base/${BedrockKnowledgeBaseId}
         - CloudWatchPutMetricPolicy: {}
       Events:
         TriagePost:
@@ -305,7 +394,10 @@ Resources:
               Action:
                 - transcribe:StartTranscriptionJob
                 - transcribe:GetTranscriptionJob
-              Resource: '*'
+              Resource: '*' # Transcribe jobs are dynamically named, so * is required or scoped to account.
+              Condition:
+                StringEquals:
+                  "transcribe:OutputBucketName": !Ref S3BucketName
       Events:
         VoiceSTTPost:
           Type: Api
@@ -331,7 +423,7 @@ Resources:
             - Effect: Allow
               Action:
                 - polly:SynthesizeSpeech
-              Resource: '*'
+              Resource: '*' # Polly SynthesizeSpeech does not support resource-level permissions
       Events:
         VoiceTTSPost:
           Type: Api
@@ -360,6 +452,66 @@ Resources:
             RestApiId: !Ref TriageApi
             Path: /emergency/cases
             Method: GET
+
+  # P0-5: Emergency Accept Function (for PHC doctor acknowledgement)
+  EmergencyAcceptFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-emergency-accept
+      CodeUri: ./dist
+      Handler: handlers/emergency.handler.updateEmergencyStatusHandler
+      Description: Emergency case acceptance and status update function
+      Environment:
+        Variables:
+          DYNAMODB_EMERGENCY_TABLE: !Ref EmergencyTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EmergencyTable
+      Events:
+        EmergencyAcceptPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref TriageApi
+            Path: /emergency/accept
+            Method: POST
+
+  # P0-5: Escalation Checker Function
+  EscalationCheckerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub ${AWS::StackName}-escalation-checker
+      CodeUri: ./dist
+      Handler: handlers/escalation-checker.handler.handler
+      Description: Checks for unacknowledged emergency cases and escalates via SMS
+      Timeout: 60
+      Environment:
+        Variables:
+          DYNAMODB_EMERGENCY_TABLE: !Ref EmergencyTable
+          ESCALATION_SNS_TOPIC_ARN: !Ref EscalationSNSTopic
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref EmergencyTable
+        - SNSPublishMessagePolicy:
+            TopicArn: !Ref EscalationSNSTopic
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/doorstep-doctor/*
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: '*' # SMS publish does not use a specific topic ARN
+              Condition:
+                StringEquals:
+                  'sns:Protocol': sms
+      Events:
+        ScheduledCheck:
+          Type: Schedule
+          Properties:
+            Schedule: rate(2 minutes)
+            Description: Check for unacknowledged emergency cases every 2 minutes
+            Enabled: true
 
   # CloudWatch Log Groups
   TriageFunctionLogGroup:
@@ -407,6 +559,57 @@ Resources:
         - Name: FunctionName
           Value: !Ref TriageFunction
 
+  # P0-1: RAG Zero Result Alarm
+  RagZeroResultAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-rag-zero-results
+      AlarmDescription: >-
+        Alert when RAG returns 0 documents more than 5 times in 10 minutes.
+        This indicates a Knowledge Base coverage gap that needs filling.
+      MetricName: rag_zero_result_count
+      Namespace: ASHA-Triage
+      Statistic: Sum
+      Period: 600
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  # P0-4: Low Confidence Triage Alarm
+  LowConfidenceTriageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-low-confidence-triage
+      AlarmDescription: >-
+        Alert when low-confidence triages exceed 10 in 30 minutes.
+        Indicates model degradation or prompt drift.
+      MetricName: low_confidence_triage_count
+      Namespace: ASHA-Triage
+      Statistic: Sum
+      Period: 1800
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
+  # P0-2: JSON Repair Alarm
+  JsonRepairAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub ${AWS::StackName}-json-repair
+      AlarmDescription: >-
+        Alert when JSON repair attempts exceed 20 in 30 minutes.
+        Indicates Claude output quality degradation.
+      MetricName: bedrock_json_repair_attempts
+      Namespace: ASHA-Triage
+      Statistic: Sum
+      Period: 1800
+      EvaluationPeriods: 1
+      Threshold: 20
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+
 Outputs:
   ApiEndpoint:
     Description: API Gateway endpoint URL
@@ -431,3 +634,15 @@ Outputs:
     Value: !Ref AnalyticsTable
     Export:
       Name: !Sub ${AWS::StackName}-analytics-table
+
+  PhcDirectoryTableName:
+    Description: DynamoDB PHC directory table name
+    Value: !Ref PhcDirectoryTable
+    Export:
+      Name: !Sub ${AWS::StackName}-phc-directory-table
+
+  EscalationSNSTopicArn:
+    Description: SNS topic ARN for emergency escalation alerts
+    Value: !Ref EscalationSNSTopic
+    Export:
+      Name: !Sub ${AWS::StackName}-escalation-topic
