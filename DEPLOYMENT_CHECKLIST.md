@@ -1,412 +1,444 @@
-# DoorStepDoctor Deployment Checklist
+# ✅ Deployment Checklist - DoorStepDoctor
 
 ## Pre-Deployment Checklist
 
-### AWS Account Setup
-- [ ] AWS account created
-- [ ] Billing alerts configured ($30, $60, $90)
-- [ ] IAM user created with programmatic access
-- [ ] Access keys downloaded and stored securely
-- [ ] AWS CLI installed and configured
-- [ ] AWS SAM CLI installed
-- [ ] Appropriate AWS region selected (ap-south-1 recommended for India)
+### 📋 AWS Setup (Manual - Already Completed)
+- [x] AWS Account created
+- [x] Billing alerts configured ($30, $60, $90)
+- [x] IAM user created with appropriate permissions
+- [x] AWS CLI installed and configured
+- [x] Bedrock model access enabled (Nova Lite)
+- [x] S3 bucket created for Knowledge Base
+- [x] Knowledge Base created and documents uploaded
+- [x] Bedrock Guardrails configured
+- [x] Cognito User Pool created
+- [x] Cognito App Client created
 
-### AWS Services Configuration
+### 🔑 Keys to Paste
+- [ ] Bedrock Knowledge Base ID
+- [ ] Bedrock Guardrail ID
+- [ ] Cognito User Pool ID
+- [ ] Cognito Client ID
 
-#### Amazon Cognito
-- [ ] User Pool created
-- [ ] User Pool ID noted
-- [ ] App Client created
-- [ ] App Client ID noted
-- [ ] User attributes configured (role, district, state)
-- [ ] Password policies set
-- [ ] MFA configured for PHC doctors
-- [ ] Test users created (ASHA, PHC, Patient)
+---
 
-#### Amazon Bedrock
-- [ ] Bedrock access enabled in AWS account
-- [ ] Claude 3 Haiku model access requested and approved
-- [ ] Knowledge Base created
-- [ ] OpenSearch Serverless collection created
-- [ ] Embedding model configured
-- [ ] Medical documents uploaded (fever, maternal health, pediatric)
-- [ ] Knowledge Base ID noted
-- [ ] Test queries validated
+## Backend Deployment
 
-#### Bedrock Guardrails (Optional but Recommended)
-- [ ] Guardrail created
-- [ ] Content filters configured (medication, diagnosis)
-- [ ] Guardrail ID noted
-- [ ] Test scenarios validated
+### 1. Environment Configuration
+```bash
+cd backend
+```
 
-### Backend Deployment
+- [ ] Create `.env` file
+- [ ] Paste Bedrock Knowledge Base ID
+- [ ] Paste Bedrock Guardrail ID
+- [ ] Paste Cognito User Pool ID
+- [ ] Paste Cognito Client ID
+- [ ] Verify all other settings
 
-#### Environment Configuration
-- [ ] `backend/.env` file created from `.env.example`
-- [ ] All environment variables populated:
-  - [ ] AWS_REGION
-  - [ ] COGNITO_USER_POOL_ID
-  - [ ] COGNITO_CLIENT_ID
-  - [ ] BEDROCK_KNOWLEDGE_BASE_ID
-  - [ ] BEDROCK_MODEL_ID
-  - [ ] BEDROCK_GUARDRAIL_ID (if using)
-  - [ ] DYNAMODB_TABLE_PREFIX
-  - [ ] LOG_LEVEL
+### 2. Dependencies & Build
+```bash
+npm install
+```
+- [ ] Dependencies installed successfully
+- [ ] No critical vulnerabilities
 
-#### Build and Test
-- [ ] Dependencies installed: `cd backend && npm install`
-- [ ] TypeScript compilation successful: `npm run build`
-- [ ] Unit tests passing: `npm test`
-- [ ] No TypeScript errors
-- [ ] No linting errors
+```bash
+npm run build
+```
+- [ ] TypeScript compiled successfully
+- [ ] `dist/` folder created
+- [ ] No build errors
 
-#### SAM Deployment
-- [ ] S3 bucket created for SAM artifacts
-- [ ] `samconfig.toml` updated with bucket name
-- [ ] SAM template validated: `sam validate`
-- [ ] SAM build successful: `sam build`
-- [ ] SAM deployment successful: `sam deploy`
-- [ ] CloudFormation stack created successfully
-- [ ] API Gateway endpoint URL noted
+### 3. Deploy to AWS
+```bash
+npm run deploy:dev
+```
+- [ ] SAM build completed
+- [ ] CloudFormation stack created
 - [ ] Lambda functions deployed
 - [ ] DynamoDB tables created
+- [ ] API Gateway created
+- [ ] API Endpoint URL received
 
-#### Post-Deployment Verification
-- [ ] API Gateway endpoint accessible
-- [ ] Lambda functions showing in AWS Console
-- [ ] DynamoDB tables visible
-- [ ] CloudWatch log groups created
-- [ ] Test API endpoint with curl/Postman
-- [ ] Authentication endpoint working
-- [ ] Triage endpoint working
-- [ ] Voice endpoints working
-- [ ] Emergency endpoints working
+**Save API Endpoint:**
+```
+https://XXXXXXXXXX.execute-api.us-east-1.amazonaws.com/development
+```
 
-### Frontend Deployment
+### 4. Verify Backend Resources
 
-#### Environment Configuration
-- [ ] `.env` file created from `.env.example`
-- [ ] `REACT_APP_API_ENDPOINT` set to deployed API Gateway URL
-- [ ] `REACT_APP_AWS_REGION` set correctly
-- [ ] `REACT_APP_DEBUG` set to false for production
+#### Lambda Functions
+- [ ] `asha-triage-dev-triage` - Created
+- [ ] `asha-triage-dev-auth` - Created
+- [ ] `asha-triage-dev-voice` - Created
+- [ ] `asha-triage-dev-emergency` - Created
 
-#### Build and Test
-- [ ] Dependencies installed: `npm install`
-- [ ] Development server runs: `npm start`
-- [ ] Login functionality tested
-- [ ] Triage form tested
-- [ ] Emergency queue tested
-- [ ] Production build successful: `npm run build`
-- [ ] Build size optimized (<5MB recommended)
+#### DynamoDB Tables
+- [ ] `asha-triage-dev-triage-records` - Created
+- [ ] `asha-triage-dev-emergency-cases` - Created
+- [ ] `asha-triage-dev-analytics` - Created
 
-#### Deployment Options
+#### API Gateway
+- [ ] `asha-triage-dev-api` - Created
+- [ ] CORS configured
+- [ ] Endpoints accessible
 
-##### Option 1: AWS Amplify (Recommended)
-- [ ] Amplify CLI installed
-- [ ] Amplify project initialized: `amplify init`
-- [ ] Hosting added: `amplify add hosting`
-- [ ] Deployed: `amplify publish`
-- [ ] Custom domain configured (optional)
-- [ ] SSL certificate configured
-- [ ] Amplify URL noted
+---
 
-##### Option 2: S3 + CloudFront
-- [ ] S3 bucket created for static hosting
-- [ ] Bucket policy configured for public read
-- [ ] Static website hosting enabled
-- [ ] Build files uploaded: `aws s3 sync build/ s3://bucket-name`
+## Frontend Deployment
+
+### 1. Environment Configuration
+```bash
+cd ..  # Back to root
+```
+
+- [ ] Create `.env` file in root
+- [ ] Paste API Endpoint from backend deployment
+- [ ] Paste Cognito User Pool ID
+- [ ] Paste Cognito Client ID
+- [ ] Verify all settings
+
+### 2. Dependencies
+```bash
+npm install
+```
+- [ ] Dependencies installed successfully
+- [ ] No critical vulnerabilities
+- [ ] React scripts available
+
+### 3. Local Testing
+```bash
+npm start
+```
+- [ ] Development server starts
+- [ ] Opens in browser at `http://localhost:3000`
+- [ ] No console errors
+- [ ] Login page loads
+
+### 4. Test Core Functionality
+
+#### Login Flow
+- [ ] ASHA Worker role button visible
+- [ ] PHC Doctor role button visible
+- [ ] Can enter username/password
+- [ ] Demo credentials work
+- [ ] Redirects to correct dashboard
+
+#### ASHA Worker Flow
+- [ ] Triage form loads
+- [ ] Symptom tags visible
+- [ ] Can select multiple tags
+- [ ] Tags show checkmarks when selected
+- [ ] Can enter additional text
+- [ ] Age and gender fields work
+- [ ] Submit button enabled when symptoms selected
+- [ ] Loading state shows during submission
+- [ ] Results display correctly
+- [ ] Urgency level shows with correct color
+- [ ] Risk score displays
+- [ ] Recommended action shows
+
+#### PHC Doctor Flow
+- [ ] Emergency queue loads
+- [ ] Cases display (if any)
+- [ ] Can update case status
+- [ ] Refresh button works
+
+#### Language Switcher
+- [ ] Globe icon visible in top-right
+- [ ] Dropdown opens on click
+- [ ] All 7 languages listed
+- [ ] Can select different language
+- [ ] UI text changes
+- [ ] Symptom tags change language
+
+#### Mobile Responsiveness
+- [ ] Test on mobile device or browser dev tools
+- [ ] Symptom tags are tappable
+- [ ] Buttons are large enough
+- [ ] Text is readable
+- [ ] Navigation works
+- [ ] Language switcher accessible
+
+---
+
+## Production Deployment
+
+### 1. Build for Production
+```bash
+npm run build
+```
+- [ ] Production build completes
+- [ ] `build/` folder created
+- [ ] Assets optimized
+- [ ] No build warnings
+
+### 2. Deploy to Hosting
+
+#### Option A: AWS Amplify
+```bash
+# Install Amplify CLI
+npm install -g @aws-amplify/cli
+
+# Initialize Amplify
+amplify init
+
+# Add hosting
+amplify add hosting
+
+# Publish
+amplify publish
+```
+- [ ] Amplify configured
+- [ ] Hosting added
+- [ ] Site published
+- [ ] URL received
+
+#### Option B: AWS S3 + CloudFront
+```bash
+# Sync to S3
+aws s3 sync build/ s3://your-bucket-name --delete
+
+# Invalidate CloudFront cache
+aws cloudfront create-invalidation --distribution-id YOUR_DIST_ID --paths "/*"
+```
+- [ ] S3 bucket configured
+- [ ] Files uploaded
 - [ ] CloudFront distribution created
-- [ ] Origin set to S3 bucket
 - [ ] SSL certificate configured
 - [ ] Custom domain configured (optional)
-- [ ] CloudFront URL noted
 
-### Security Configuration
+### 3. Update Environment Variables
+- [ ] Change `ENVIRONMENT` to `production`
+- [ ] Update API endpoint to production URL
+- [ ] Disable test mode
+- [ ] Configure production Cognito pool
 
-#### IAM Roles and Policies
-- [ ] Lambda execution roles have minimum required permissions
-- [ ] DynamoDB access policies configured
-- [ ] Bedrock access policies configured
-- [ ] Cognito access policies configured
-- [ ] S3 access policies configured (if using)
-- [ ] CloudWatch Logs policies configured
+---
 
-#### Encryption
-- [ ] DynamoDB encryption at rest enabled (AES-256)
-- [ ] S3 bucket encryption enabled (if using)
-- [ ] KMS keys created and configured
-- [ ] TLS 1.2+ enforced for all API calls
-- [ ] API Gateway using HTTPS only
+## Post-Deployment Verification
 
-#### CORS Configuration
-- [ ] API Gateway CORS configured
-- [ ] Allowed origins set correctly
-- [ ] Allowed headers configured
-- [ ] Allowed methods configured
-- [ ] Credentials allowed if needed
+### Backend Health Checks
+- [ ] API Gateway responds to requests
+- [ ] Lambda functions execute successfully
+- [ ] DynamoDB tables accessible
+- [ ] Bedrock API calls work
+- [ ] Cognito authentication works
+- [ ] CloudWatch logs are being created
 
-### Monitoring and Logging
+### Frontend Health Checks
+- [ ] Site loads without errors
+- [ ] All assets load (CSS, JS, images)
+- [ ] Login works
+- [ ] Triage submission works
+- [ ] Results display correctly
+- [ ] Language switching works
+- [ ] Mobile view works
 
-#### CloudWatch
-- [ ] Lambda function logs visible
-- [ ] API Gateway logs enabled
-- [ ] Custom metrics configured
-- [ ] Log retention period set (30 days recommended)
-- [ ] CloudWatch dashboard created
+### Integration Tests
+- [ ] End-to-end triage flow works
+- [ ] ASHA can submit assessment
+- [ ] PHC can view emergency cases
+- [ ] Language changes persist
+- [ ] Session management works
+- [ ] Logout works
 
-#### Alarms
-- [ ] Lambda error rate alarm configured
-- [ ] API Gateway 5xx error alarm configured
-- [ ] DynamoDB throttling alarm configured
-- [ ] Bedrock API latency alarm configured
-- [ ] Cost alarm configured
+---
 
-### Testing
+## Monitoring Setup
 
-#### End-to-End Testing
-- [ ] User registration working
-- [ ] User login working
-- [ ] ASHA worker can submit triage
-- [ ] Triage results displayed correctly
-- [ ] Emergency cases appear in PHC queue
-- [ ] PHC doctor can update case status
-- [ ] Voice input working (if implemented)
-- [ ] Multi-language support working
-- [ ] Low bandwidth mode working
+### CloudWatch Alarms
+- [ ] Lambda error rate alarm
+- [ ] API Gateway 5xx error alarm
+- [ ] DynamoDB throttling alarm
+- [ ] Bedrock API error alarm
+- [ ] Cost alarm ($30, $60, $90)
 
-#### Performance Testing
-- [ ] API response time <2 seconds
-- [ ] Frontend load time <3 seconds
-- [ ] Concurrent user testing (10+ users)
-- [ ] Mobile responsiveness verified
-- [ ] Cross-browser testing completed
+### CloudWatch Dashboards
+- [ ] Lambda execution metrics
+- [ ] API Gateway request metrics
+- [ ] Bedrock token usage
+- [ ] DynamoDB read/write capacity
+- [ ] Error rate trends
 
-#### Security Testing
-- [ ] Authentication required for protected routes
-- [ ] Role-based access control working
-- [ ] SQL injection testing (N/A for DynamoDB)
-- [ ] XSS prevention verified
-- [ ] CSRF protection verified
-- [ ] API rate limiting tested
+### Logging
+- [ ] Lambda logs in CloudWatch
+- [ ] API Gateway access logs
+- [ ] Application error logs
+- [ ] Audit logs for data access
 
-### Documentation
+---
 
-#### Technical Documentation
+## Security Checklist
+
+### Backend Security
+- [ ] IAM roles follow least-privilege
+- [ ] API Gateway has authentication
+- [ ] DynamoDB encryption at rest enabled
+- [ ] S3 buckets are private
+- [ ] KMS keys configured
+- [ ] Secrets in environment variables (not code)
+
+### Frontend Security
+- [ ] HTTPS enabled
+- [ ] Content Security Policy configured
+- [ ] No sensitive data in client code
+- [ ] API keys not exposed
+- [ ] CORS properly configured
+
+### Compliance
+- [ ] DPDP Act 2023 requirements met
+- [ ] Data retention policies configured
+- [ ] Audit logging enabled
+- [ ] Consent management ready
+- [ ] Privacy policy available
+
+---
+
+## Performance Optimization
+
+### Backend
+- [ ] Lambda memory optimized
+- [ ] DynamoDB auto-scaling enabled
+- [ ] API Gateway caching configured
+- [ ] Bedrock token limits set
+- [ ] Connection pooling enabled
+
+### Frontend
+- [ ] Code splitting enabled
+- [ ] Assets minified
+- [ ] Images optimized
+- [ ] Lazy loading implemented
+- [ ] Service worker configured
+
+---
+
+## Documentation
+
 - [ ] API documentation complete
-- [ ] Architecture diagrams created
-- [ ] Deployment guide updated
-- [ ] Environment variables documented
-- [ ] Troubleshooting guide created
+- [ ] User guides created
+- [ ] Admin documentation available
+- [ ] Troubleshooting guide ready
+- [ ] Architecture diagrams updated
 
-#### User Documentation
-- [ ] ASHA worker user guide created
-- [ ] PHC doctor user guide created
-- [ ] FAQ document created
-- [ ] Video tutorials recorded (optional)
+---
+
+## Training & Rollout
+
+### ASHA Worker Training
 - [ ] Training materials prepared
+- [ ] Demo accounts created
+- [ ] User guide distributed
+- [ ] Support contact provided
+- [ ] Feedback mechanism established
 
-### Backup and Recovery
+### PHC Doctor Training
+- [ ] Training materials prepared
+- [ ] Demo accounts created
+- [ ] User guide distributed
+- [ ] Support contact provided
+- [ ] Feedback mechanism established
 
-#### Backup Strategy
+---
+
+## Backup & Recovery
+
 - [ ] DynamoDB point-in-time recovery enabled
-- [ ] DynamoDB backup schedule configured
-- [ ] S3 versioning enabled (if using)
-- [ ] Lambda function code backed up
-- [ ] Configuration files backed up
-
-#### Disaster Recovery
+- [ ] S3 versioning enabled
+- [ ] Lambda function versions tagged
+- [ ] CloudFormation templates backed up
 - [ ] Recovery procedures documented
-- [ ] RTO (Recovery Time Objective) defined
-- [ ] RPO (Recovery Point Objective) defined
-- [ ] Backup restoration tested
-- [ ] Failover procedures documented
 
-### Cost Optimization
+---
 
-#### Resource Optimization
-- [ ] Lambda memory settings optimized
-- [ ] Lambda timeout settings optimized
-- [ ] DynamoDB on-demand pricing configured
-- [ ] CloudWatch log retention optimized
-- [ ] Unused resources identified and removed
+## Cost Optimization
 
-#### Cost Monitoring
-- [ ] AWS Cost Explorer enabled
-- [ ] Budget alerts configured
+- [ ] Billing alerts configured
 - [ ] Cost allocation tags applied
-- [ ] Daily cost monitoring set up
+- [ ] Reserved capacity evaluated
+- [ ] Unused resources identified
 - [ ] Cost optimization recommendations reviewed
 
-### Compliance and Legal
+**Estimated Monthly Cost:**
+- Lambda: $5-10
+- DynamoDB: $5-15
+- Bedrock (Nova Lite): $10-20
+- API Gateway: $3-5
+- S3: $1-2
+- CloudWatch: $2-5
+- **Total: ~$26-57/month** (for moderate usage)
 
-#### Data Privacy
-- [ ] PII handling procedures documented
-- [ ] Data retention policies configured
-- [ ] Data anonymization implemented
-- [ ] User consent mechanisms in place
-- [ ] Privacy policy created
+---
 
-#### Compliance
-- [ ] HIPAA compliance reviewed (if applicable)
-- [ ] DPDP Act compliance reviewed (India)
-- [ ] Audit logging enabled
-- [ ] Access logs retained
-- [ ] Compliance documentation complete
+## Support & Maintenance
 
-### Go-Live Preparation
+### Monitoring Schedule
+- [ ] Daily: Check CloudWatch alarms
+- [ ] Weekly: Review error logs
+- [ ] Monthly: Analyze usage patterns
+- [ ] Quarterly: Security audit
 
-#### Pre-Launch
-- [ ] All checklist items completed
-- [ ] Stakeholder approval obtained
-- [ ] Launch date scheduled
-- [ ] Communication plan prepared
-- [ ] Support team briefed
-
-#### Launch Day
-- [ ] Final deployment to production
-- [ ] Smoke tests completed
-- [ ] Monitoring dashboards active
-- [ ] Support team on standby
-- [ ] Rollback plan ready
-
-#### Post-Launch
-- [ ] Monitor for 24 hours continuously
-- [ ] Check error rates and logs
-- [ ] Verify user feedback
-- [ ] Address any critical issues immediately
-- [ ] Document lessons learned
-
-### Post-Deployment Monitoring (First Week)
-
-#### Daily Checks
-- [ ] Check CloudWatch logs for errors
-- [ ] Monitor API Gateway metrics
-- [ ] Review Lambda function performance
-- [ ] Check DynamoDB throttling
-- [ ] Monitor Bedrock API usage and costs
-- [ ] Review user feedback
-- [ ] Check support tickets
-
-#### Weekly Review
-- [ ] Performance metrics review
-- [ ] Cost analysis
-- [ ] User adoption metrics
-- [ ] Error rate trends
-- [ ] Optimization opportunities identified
-
-### Maintenance Schedule
-
-#### Daily
-- [ ] Monitor CloudWatch alarms
-- [ ] Check error logs
-- [ ] Review critical alerts
-
-#### Weekly
-- [ ] Review performance metrics
-- [ ] Analyze cost trends
-- [ ] Update knowledge base documents
-- [ ] Review user feedback
-
-#### Monthly
-- [ ] Security patch updates
-- [ ] Dependency updates
-- [ ] Performance optimization
-- [ ] Cost optimization review
-- [ ] Backup verification
-- [ ] Disaster recovery drill
-
-#### Quarterly
-- [ ] Comprehensive security audit
-- [ ] Compliance review
-- [ ] Architecture review
-- [ ] Capacity planning
-- [ ] User training refresh
+### Update Schedule
+- [ ] Weekly: Dependency updates
+- [ ] Monthly: Feature updates
+- [ ] Quarterly: Major version updates
+- [ ] Annually: Security review
 
 ---
 
 ## Emergency Contacts
 
-### AWS Support
-- Support Plan: [Basic/Developer/Business/Enterprise]
-- Support Case URL: https://console.aws.amazon.com/support/
+**AWS Support:**
+- Account ID: _______________
+- Support Plan: _______________
+- Contact: _______________
 
-### Team Contacts
-- Technical Lead: [Name, Phone, Email]
-- DevOps Engineer: [Name, Phone, Email]
-- Security Officer: [Name, Phone, Email]
-- Product Owner: [Name, Phone, Email]
+**Development Team:**
+- Lead: _______________
+- Backend: _______________
+- Frontend: _______________
 
-### Escalation Path
-1. On-call engineer
-2. Technical lead
-3. CTO/Engineering manager
-4. AWS support (if needed)
-
----
-
-## Rollback Procedures
-
-### Backend Rollback
-```bash
-# Rollback to previous CloudFormation stack
-aws cloudformation update-stack \
-  --stack-name doorstep-doctor-backend \
-  --use-previous-template
-
-# Or delete and redeploy previous version
-sam deploy --config-file samconfig.toml.backup
-```
-
-### Frontend Rollback
-```bash
-# Amplify
-amplify publish --rollback
-
-# S3 + CloudFront
-aws s3 sync backup/ s3://bucket-name --delete
-aws cloudfront create-invalidation --distribution-id ID --paths "/*"
-```
-
-### Database Rollback
-```bash
-# Restore DynamoDB from backup
-aws dynamodb restore-table-from-backup \
-  --target-table-name TriageMetadata \
-  --backup-arn arn:aws:dynamodb:region:account:table/TriageMetadata/backup/backup-id
-```
+**Stakeholders:**
+- Project Manager: _______________
+- Medical Advisor: _______________
+- ASHA Coordinator: _______________
 
 ---
 
-## Success Criteria
+## Final Sign-Off
 
-### Technical Metrics
-- [ ] API response time <2 seconds (95th percentile)
-- [ ] Error rate <1%
-- [ ] Uptime >99%
-- [ ] Cost per triage ₹1-2
-- [ ] Concurrent users >50
+- [ ] All checklist items completed
+- [ ] System tested end-to-end
+- [ ] Documentation complete
+- [ ] Training conducted
+- [ ] Support team ready
+- [ ] Stakeholders informed
 
-### Business Metrics
-- [ ] User registration >100 ASHA workers
-- [ ] Daily triage requests >50
-- [ ] Emergency detection accuracy >90%
-- [ ] User satisfaction >4/5
-- [ ] PHC response time <30 minutes
+**Deployment Date:** _______________  
+**Deployed By:** _______________  
+**Approved By:** _______________  
 
 ---
 
-## Notes
+## 🎉 Congratulations!
 
-- Keep this checklist updated as deployment procedures evolve
-- Document any deviations from standard procedures
-- Share lessons learned with the team
-- Update runbooks based on production experience
+Your DoorStepDoctor application is now live and ready to serve ASHA workers and PHC doctors in rural India!
+
+**Next Steps:**
+1. Monitor system performance
+2. Collect user feedback
+3. Iterate and improve
+4. Scale as needed
+
+**Remember:**
+- Keep AWS costs monitored
+- Respond to alarms promptly
+- Update documentation regularly
+- Support your users
 
 ---
 
-**Deployment Status**: [ ] Not Started | [ ] In Progress | [ ] Completed
-
-**Deployed By**: _______________  
-**Deployment Date**: _______________  
-**Production URL**: _______________  
-**API Endpoint**: _______________
+**Status**: Ready for Production ✅  
+**Version**: 1.0.0  
+**Last Updated**: 2024

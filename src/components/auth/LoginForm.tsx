@@ -1,26 +1,21 @@
 import React, { useState } from 'react';
-import { User, Lock, Phone, UserCheck, Stethoscope } from 'lucide-react';
+import { User, Lock, UserCheck, Stethoscope, Heart } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 const LoginForm: React.FC = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [isLogin, setIsLogin] = useState(true);
-  const [userType, setUserType] = useState<'patient' | 'doctor'>('patient');
+  const { t } = useLanguage();
+  const [userType, setUserType] = useState<'asha' | 'phc'>('asha');
   const [formData, setFormData] = useState({
-    email: '',
+    username: '',
     password: '',
-    name: '',
-    phone: '',
-    age: '',
-    location: '',
-    medicalLicense: '',
-    specialization: ''
   });
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
@@ -32,282 +27,173 @@ const LoginForm: React.FC = () => {
     setIsLoading(true);
 
     try {
-      await login(formData.email, formData.password);
-      navigate('/');
+      await login(formData.username, formData.password);
+      navigate(userType === 'asha' ? '/triage' : '/emergency-queue');
     } catch (error) {
       console.error('Login failed:', error);
-      alert('Login failed. Please check your credentials.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDemoLogin = async (role: 'patient' | 'doctor' | 'asha') => {
-    const demoCredentials = {
-      patient: { email: 'patient@demo.com', password: 'demo123' },
-      doctor: { email: 'doctor@demo.com', password: 'demo123' },
-      asha: { email: 'asha@demo.com', password: 'demo123' }
-    };
-
-    setIsLoading(true);
-    try {
-      const creds = demoCredentials[role];
-      await login(creds.email, creds.password);
-      navigate('/');
-    } catch (error) {
-      console.error('Demo login failed:', error);
-      alert('Demo login failed. Please try again.');
+      alert(t('login.error') || 'Login failed. Please check your credentials.');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="max-w-md mx-auto">
-      <div className="card">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold mb-2">
-            {isLogin ? 'Welcome Back' : 'Create Account'}
-          </h1>
-          <p className="text-gray-600">
-            {isLogin ? 'Sign in to your account' : 'Join DoorStepDoctor today'}
-          </p>
-        </div>
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="max-w-md w-full">
+        <div className="card">
+          {/* Logo and Title */}
+          <div className="text-center mb-8">
+            <div className="flex justify-center mb-4">
+              <div className="bg-green-100 p-4 rounded-full">
+                <Heart className="text-green-600" size={48} />
+              </div>
+            </div>
+            <h1 className="text-3xl font-bold mb-2 text-green-800">
+              {t('app.title')}
+            </h1>
+            <p className="text-gray-600">
+              {t('app.subtitle')}
+            </p>
+          </div>
 
-        {/* User Type Selection */}
-        {!isLogin && (
+          {/* User Type Selection */}
           <div className="mb-6">
-            <label className="block text-sm font-medium mb-2">I am a:</label>
-            <div className="grid grid-cols-2 gap-2">
+            <label className="block text-sm font-medium mb-3 text-gray-700">
+              {t('login.selectRole') || 'Select Your Role'}
+            </label>
+            <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
-                onClick={() => setUserType('patient')}
-                className={`flex items-center justify-center gap-2 p-3 border rounded-lg transition-all ${
-                  userType === 'patient' 
-                    ? 'border-blue-500 bg-blue-50 text-blue-600' 
-                    : 'border-gray-300 hover:border-gray-400'
+                onClick={() => setUserType('asha')}
+                className={`flex flex-col items-center justify-center gap-3 p-6 border-2 rounded-xl transition-all ${
+                  userType === 'asha' 
+                    ? 'border-green-500 bg-green-50 shadow-md' 
+                    : 'border-gray-200 hover:border-green-300 hover:bg-green-50'
                 }`}
               >
-                <User size={20} />
-                Patient
+                <UserCheck size={32} className={userType === 'asha' ? 'text-green-600' : 'text-gray-400'} />
+                <span className={`font-semibold ${userType === 'asha' ? 'text-green-700' : 'text-gray-600'}`}>
+                  {t('login.asha')}
+                </span>
               </button>
               <button
                 type="button"
-                onClick={() => setUserType('doctor')}
-                className={`flex items-center justify-center gap-2 p-3 border rounded-lg transition-all ${
-                  userType === 'doctor' 
-                    ? 'border-blue-500 bg-blue-50 text-blue-600' 
-                    : 'border-gray-300 hover:border-gray-400'
+                onClick={() => setUserType('phc')}
+                className={`flex flex-col items-center justify-center gap-3 p-6 border-2 rounded-xl transition-all ${
+                  userType === 'phc' 
+                    ? 'border-green-500 bg-green-50 shadow-md' 
+                    : 'border-gray-200 hover:border-green-300 hover:bg-green-50'
                 }`}
               >
-                <Stethoscope size={20} />
-                Doctor
+                <Stethoscope size={32} className={userType === 'phc' ? 'text-green-600' : 'text-gray-400'} />
+                <span className={`font-semibold ${userType === 'phc' ? 'text-green-700' : 'text-gray-600'}`}>
+                  {t('login.phc')}
+                </span>
               </button>
             </div>
           </div>
-        )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Name (Registration only) */}
-          {!isLogin && (
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Username */}
             <div>
-              <label className="block text-sm font-medium mb-1">Full Name</label>
+              <label className="block text-sm font-medium mb-2 text-gray-700">
+                {t('login.username')}
+              </label>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                 <input
                   type="text"
-                  name="name"
-                  value={formData.name}
+                  name="username"
+                  value={formData.username}
                   onChange={handleInputChange}
-                  placeholder="Enter your full name"
+                  placeholder={t('login.usernamePlaceholder') || 'Enter username'}
                   className="input pl-10"
                   required
+                  autoComplete="username"
                 />
               </div>
             </div>
-          )}
 
-          {/* Email */}
-          <div>
-            <label className="block text-sm font-medium mb-1">Email</label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleInputChange}
-              placeholder="Enter your email"
-              className="input"
-              required
-            />
-          </div>
-
-          {/* Password */}
-          <div>
-            <label className="block text-sm font-medium mb-1">Password</label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-              <input
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleInputChange}
-                placeholder="Enter your password"
-                className="input pl-10"
-                required
-              />
-            </div>
-          </div>
-
-          {/* Phone (Registration only) */}
-          {!isLogin && (
+            {/* Password */}
             <div>
-              <label className="block text-sm font-medium mb-1">Phone Number</label>
+              <label className="block text-sm font-medium mb-2 text-gray-700">
+                {t('login.password')}
+              </label>
               <div className="relative">
-                <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
                 <input
-                  type="tel"
-                  name="phone"
-                  value={formData.phone}
+                  type="password"
+                  name="password"
+                  value={formData.password}
                   onChange={handleInputChange}
-                  placeholder="+91-9876543210"
+                  placeholder={t('login.passwordPlaceholder') || 'Enter password'}
                   className="input pl-10"
                   required
+                  autoComplete="current-password"
                 />
               </div>
             </div>
-          )}
 
-          {/* Patient-specific fields */}
-          {!isLogin && userType === 'patient' && (
-            <>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Age</label>
-                  <input
-                    type="number"
-                    name="age"
-                    value={formData.age}
-                    onChange={handleInputChange}
-                    placeholder="25"
-                    className="input"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Location</label>
-                  <input
-                    type="text"
-                    name="location"
-                    value={formData.location}
-                    onChange={handleInputChange}
-                    placeholder="Village, State"
-                    className="input"
-                    required
-                  />
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Doctor-specific fields */}
-          {!isLogin && userType === 'doctor' && (
-            <>
-              <div>
-                <label className="block text-sm font-medium mb-1">Medical License Number</label>
-                <input
-                  type="text"
-                  name="medicalLicense"
-                  value={formData.medicalLicense}
-                  onChange={handleInputChange}
-                  placeholder="MH12345"
-                  className="input"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Specialization</label>
-                <select
-                  name="specialization"
-                  value={formData.specialization}
-                  onChange={handleInputChange}
-                  className="input"
-                  required
-                >
-                  <option value="">Select specialization</option>
-                  <option value="General Medicine">General Medicine</option>
-                  <option value="Pediatrics">Pediatrics</option>
-                  <option value="Gynecology">Gynecology</option>
-                  <option value="Cardiology">Cardiology</option>
-                  <option value="Dermatology">Dermatology</option>
-                  <option value="Orthopedics">Orthopedics</option>
-                </select>
-              </div>
-            </>
-          )}
-
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={isLoading}
-            className={`button w-full ${isLoading ? 'bg-gray-400' : ''}`}
-          >
-            {isLoading ? 'Processing...' : (isLogin ? 'Sign In' : 'Create Account')}
-          </button>
-        </form>
-
-        {/* Toggle Login/Register */}
-        <div className="text-center mt-6">
-          <p className="text-gray-600">
-            {isLogin ? "Don't have an account?" : "Already have an account?"}
+            {/* Submit Button */}
             <button
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-blue-600 hover:text-blue-700 ml-1 font-medium"
-            >
-              {isLogin ? 'Sign up' : 'Sign in'}
-            </button>
-          </p>
-        </div>
-
-        {/* Demo Login */}
-        <div className="mt-6 pt-6 border-t">
-          <p className="text-center text-sm text-gray-600 mb-3">Quick Demo Access:</p>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={() => handleDemoLogin('asha')}
-              className="button secondary flex items-center justify-center gap-1 text-sm"
+              type="submit"
               disabled={isLoading}
+              className={`button w-full text-lg py-4 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              <UserCheck size={16} />
-              ASHA
+              {isLoading ? (
+                <span className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                  {t('login.processing') || 'Processing...'}
+                </span>
+              ) : (
+                t('login.signin')
+              )}
             </button>
-            <button
-              onClick={() => handleDemoLogin('doctor')}
-              className="button secondary flex items-center justify-center gap-1 text-sm"
-              disabled={isLoading}
-            >
-              <Stethoscope size={16} />
-              Doctor
-            </button>
-            <button
-              onClick={() => handleDemoLogin('patient')}
-              className="button secondary flex items-center justify-center gap-1 text-sm"
-              disabled={isLoading}
-            >
-              <User size={16} />
-              Patient
-            </button>
+          </form>
+
+          {/* Demo Login */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <p className="text-center text-sm text-gray-600 mb-3">
+              {t('login.demoAccess') || 'Quick Demo Access:'}
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => {
+                  setFormData({ username: 'asha_worker_001', password: 'demo123' });
+                  setUserType('asha');
+                }}
+                className="button secondary flex items-center justify-center gap-2 text-sm py-3"
+                disabled={isLoading}
+              >
+                <UserCheck size={16} />
+                {t('login.asha')}
+              </button>
+              <button
+                onClick={() => {
+                  setFormData({ username: 'phc_doctor_001', password: 'demo123' });
+                  setUserType('phc');
+                }}
+                className="button secondary flex items-center justify-center gap-2 text-sm py-3"
+                disabled={isLoading}
+              >
+                <Stethoscope size={16} />
+                {t('login.phc')}
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* Security Notice */}
-        <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-          <div className="flex items-start gap-2">
-            <UserCheck className="text-blue-600 mt-1" size={20} />
-            <div>
-              <h3 className="font-bold text-blue-800 text-sm">Secure & Private</h3>
-              <p className="text-blue-700 text-xs">
-                Your data is protected with end-to-end encryption and HIPAA compliance.
-              </p>
+          {/* Security Notice */}
+          <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
+            <div className="flex items-start gap-3">
+              <UserCheck className="text-green-600 mt-1 flex-shrink-0" size={20} />
+              <div>
+                <h3 className="font-semibold text-green-800 text-sm mb-1">
+                  {t('login.secureTitle') || 'Secure & Private'}
+                </h3>
+                <p className="text-green-700 text-xs leading-relaxed">
+                  {t('login.secureDesc') || 'Your data is protected with end-to-end encryption and complies with DPDP Act 2023.'}
+                </p>
+              </div>
             </div>
           </div>
         </div>

@@ -14,9 +14,9 @@ export const config = {
 
   // Amazon Bedrock Configuration
   bedrock: {
-    modelId: process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-haiku-20240307-v1:0',
+    modelId: process.env.BEDROCK_MODEL_ID || 'amazon.nova-lite-v1:0',
     knowledgeBaseId: process.env.BEDROCK_KB_ID || '',
-    maxTokens: parseInt(process.env.BEDROCK_MAX_TOKENS || '400', 10),
+    maxTokens: parseInt(process.env.BEDROCK_MAX_TOKENS || '300', 10),
     temperature: parseFloat(process.env.BEDROCK_TEMPERATURE || '0.2'),
     topP: parseFloat(process.env.BEDROCK_TOP_P || '0.9'),
     guardrailId: process.env.BEDROCK_GUARDRAIL_ID || '',
