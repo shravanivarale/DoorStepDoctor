@@ -12,7 +12,7 @@ import { z } from 'zod';
  * - high: Should be seen within hours
  * - emergency: Immediate medical attention required
  */
-export type UrgencyLevel = 'low' | 'medium' | 'high' | 'emergency';
+export type UrgencyLevel = 'low' | 'medium' | 'high' | 'emergency' | 'escalate' | 'critical';
 /**
  * User roles in the system
  */
@@ -84,7 +84,7 @@ export type TriageRequest = z.infer<typeof TriageRequestSchema>;
  * Structured JSON output from Claude 3 Haiku via Bedrock
  */
 export declare const TriageResponseSchema: z.ZodObject<{
-    urgencyLevel: z.ZodEnum<["low", "medium", "high", "emergency"]>;
+    urgencyLevel: z.ZodEnum<["low", "medium", "high", "emergency", "escalate", "critical"]>;
     riskScore: z.ZodNumber;
     recommendedAction: z.ZodString;
     referToPhc: z.ZodBoolean;
@@ -93,7 +93,7 @@ export declare const TriageResponseSchema: z.ZodObject<{
     reasoning: z.ZodOptional<z.ZodString>;
     redFlags: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
 }, "strip", z.ZodTypeAny, {
-    urgencyLevel: "emergency" | "low" | "medium" | "high";
+    urgencyLevel: "emergency" | "low" | "medium" | "high" | "escalate" | "critical";
     riskScore: number;
     recommendedAction: string;
     referToPhc: boolean;
@@ -102,7 +102,7 @@ export declare const TriageResponseSchema: z.ZodObject<{
     reasoning?: string | undefined;
     redFlags?: string[] | undefined;
 }, {
-    urgencyLevel: "emergency" | "low" | "medium" | "high";
+    urgencyLevel: "emergency" | "low" | "medium" | "high" | "escalate" | "critical";
     riskScore: number;
     recommendedAction: string;
     referToPhc: boolean;
@@ -149,7 +149,7 @@ export interface KnowledgeDocument {
  */
 export interface EmergencyEscalation {
     triageId: string;
-    urgencyLevel: 'emergency';
+    urgencyLevel: 'emergency' | 'critical';
     patientInfo: {
         age?: number;
         gender?: string;
@@ -165,12 +165,14 @@ export interface EmergencyEscalation {
     };
     nearestPhc: {
         name: string;
-        distance: number;
+        distance: number | null;
         contact: string;
     };
     referralNote: string;
     timestamp: string;
     notificationSent: boolean;
+    notificationStatus: 'pending_ack' | 'acknowledged' | 'escalated';
+    notifiedAt: string;
 }
 /**
  * User Session
@@ -239,6 +241,8 @@ export interface VoiceProcessingResult {
     detectedLanguage: SupportedLanguage;
     processingTimeMs: number;
     audioLengthSeconds: number;
+    requiresConfirmation?: boolean;
+    message?: string;
 }
 /**
  * SMS Triage Request

@@ -121,7 +121,7 @@ async function emergencyEscalationExample() {
       
       console.log('\nEmergency Escalation:');
       console.log(`- Nearest PHC: ${escalation.nearestPhc.name}`);
-      console.log(`- Distance: ${escalation.nearestPhc.distance.toFixed(1)} km`);
+      console.log(`- Distance: ${escalation.nearestPhc.distance?.toFixed(1) || 'N/A'} km`);
       console.log(`- Contact: ${escalation.nearestPhc.contact}`);
       console.log(`- Notification Sent: ${escalation.notificationSent ? 'Yes' : 'No'}`);
       console.log('\nReferral Note:');

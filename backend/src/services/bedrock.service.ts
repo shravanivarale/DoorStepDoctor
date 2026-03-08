@@ -186,7 +186,7 @@ export class BedrockService {
 
     try {
       // ── P2-6: Check Semantic Cache ──
-      const cacheKey = buildCacheKey(request.symptoms, request.patientAge, request.patientGender);
+      const cacheKey = buildCacheKey(request.symptoms, request.patientAge || 0, request.patientGender || 'unknown');
       const cachedResponse = await dynamoDBService.getCachedResponse(cacheKey);
 
       if (cachedResponse) {
@@ -266,20 +266,8 @@ export class BedrockService {
       const processingTimeMs = Date.now() - startTime;
 
       // ── P1-4: Track Guardrail Usage Latency & Cost ──
-      // If a Guardrail was triggered or applied, extract its latency from metadata
-      const guardrailLatency = response.$metadata?.totalRetryDelay || 0; // Using retry delay as a proxy if explicit guardrail latency is missing in standard types, or ideally standard bedrock metrics.
-      // Bedrock runtime actually returns amazon-bedrock-guardrailAction in headers or similar.
-      // For this implementation, we will emit a standard latency metric.
-
-      let guardrailAction = 'NONE';
-      if (responseData.amazonBedrockGuardrailAction) {
-        guardrailAction = responseData.amazonBedrockGuardrailAction;
-      }
-
-      this.emitMetric('guardrail_latency_ms', processingTimeMs, 'Milliseconds', [
-        { Name: 'ModelId', Value: config.bedrock.modelId },
-        { Name: 'ActionApplied', Value: guardrailAction }
-      ]);
+      await this.emitMetric('guardrail_latency_ms', processingTimeMs);
+      
       // ── P0-2: Robust JSON extraction with repair pipeline ──
       const triageResponse = await this.extractTriageResponseWithRepair(
         responseData,

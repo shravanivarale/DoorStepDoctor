@@ -108,6 +108,25 @@ class APIService {
   }
 
   /**
+   * Signup new user (AWS Cognito)
+   */
+  async signup(userData: {
+    username: string;
+    email: string;
+    password: string;
+    fullName: string;
+    phoneNumber: string;
+    location: string;
+    registrationId: string;
+    userType: 'asha' | 'phc';
+  }): Promise<{ userId: string; message: string }> {
+    return this.request('/auth/signup', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+  }
+
+  /**
    * Validate current token
    */
   async validateToken(): Promise<UserSession> {

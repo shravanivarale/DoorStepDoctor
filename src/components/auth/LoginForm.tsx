@@ -28,17 +28,42 @@ const LoginForm: React.FC = () => {
 
     try {
       await login(formData.username, formData.password);
+      
+      // Success message
+      alert('✅ Login successful! Redirecting to dashboard...');
+      
+      // Navigate to appropriate dashboard
       navigate(userType === 'asha' ? '/triage' : '/emergency-queue');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login failed:', error);
-      alert(t('login.error') || 'Login failed. Please check your credentials.');
+      
+      // User-friendly error messages
+      let errorMessage = 'Login failed. ';
+      
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+        errorMessage = '⚠️ Backend server is not available.\n\n' +
+                      'This is expected if you haven\'t deployed the backend yet.\n\n' +
+                      'To fix this:\n' +
+                      '1. Deploy backend using AWS SAM\n' +
+                      '2. Add API Gateway endpoint to .env.local\n' +
+                      '3. Restart the app\n\n' +
+                      'See AWS_SETUP_INSTRUCTIONS.md for details.';
+      } else if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
+        errorMessage = '❌ Invalid username or password.\n\nPlease check your credentials and try again.';
+      } else if (error.message?.includes('User does not exist')) {
+        errorMessage = '❌ User not found.\n\nPlease sign up first or check your username.';
+      } else {
+        errorMessage = `❌ ${error.message || 'An unexpected error occurred. Please try again.'}`;
+      }
+      
+      alert(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-green-50 to-blue-50">
       <div className="max-w-md w-full">
         <div className="card">
           {/* Logo and Title */}
@@ -58,7 +83,7 @@ const LoginForm: React.FC = () => {
 
           {/* User Type Selection */}
           <div className="mb-6">
-            <label className="block text-sm font-medium mb-3 text-gray-700">
+            <label className="block text-sm font-medium mb-3 text-gray-700 text-center">
               {t('login.selectRole') || 'Select Your Role'}
             </label>
             <div className="grid grid-cols-2 gap-3">
@@ -150,6 +175,19 @@ const LoginForm: React.FC = () => {
               )}
             </button>
           </form>
+
+          {/* Sign Up Link */}
+          <div className="mt-6 text-center">
+            <p className="text-gray-600">
+              Don't have an account?{' '}
+              <button
+                onClick={() => navigate('/signup')}
+                className="text-green-600 hover:text-green-700 font-semibold transition-colors"
+              >
+                Sign Up
+              </button>
+            </p>
+          </div>
 
           {/* Demo Login */}
           <div className="mt-6 pt-6 border-t border-gray-200">

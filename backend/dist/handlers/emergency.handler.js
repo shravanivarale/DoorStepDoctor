@@ -15,6 +15,7 @@ exports.getEmergencyContactHandler = getEmergencyContactHandler;
 const emergency_service_1 = __importDefault(require("../services/emergency.service"));
 const dynamodb_service_1 = __importDefault(require("../services/dynamodb.service"));
 const logger_1 = __importDefault(require("../utils/logger"));
+const auth_validator_1 = require("../utils/auth-validator");
 const errors_1 = require("../utils/errors");
 /**
  * Get emergency cases for PHC dashboard
@@ -23,6 +24,8 @@ async function getEmergencyCasesHandler(event, context) {
     const requestId = context.awsRequestId;
     logger_1.default.setContext({ requestId, handler: 'getEmergencyCases' });
     try {
+        // ── P1-2: Independent JWT validation (defence-in-depth) ──
+        await (0, auth_validator_1.validateToken)(event);
         const district = event.queryStringParameters?.district;
         const status = event.queryStringParameters?.status || 'pending';
         if (!district) {
@@ -66,6 +69,8 @@ async function updateEmergencyStatusHandler(event, context) {
     const requestId = context.awsRequestId;
     logger_1.default.setContext({ requestId, handler: 'updateEmergencyStatus' });
     try {
+        // ── P1-2: Independent JWT validation (defence-in-depth) ──
+        await (0, auth_validator_1.validateToken)(event);
         if (!event.body) {
             throw new errors_1.ValidationError('Request body is required');
         }
@@ -78,6 +83,11 @@ async function updateEmergencyStatusHandler(event, context) {
         }
         logger_1.default.info('Updating emergency status', { emergencyId, status });
         await dynamodb_service_1.default.updateEmergencyStatus(emergencyId, status);
+        // ── P0-5: When a PHC doctor acknowledges a case, update notification status ──
+        // This prevents the EscalationCheckerFunction from escalating further.
+        if (status === 'acknowledged') {
+            await dynamodb_service_1.default.updateNotificationStatus(emergencyId, 'acknowledged');
+        }
         const response = {
             success: true,
             data: { message: 'Emergency status updated successfully' },

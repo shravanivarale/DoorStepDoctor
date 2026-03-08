@@ -9,7 +9,6 @@ Globals:
     MemorySize: 512
     Environment:
       Variables:
-        AWS_REGION: !Ref AWS::Region
         ENVIRONMENT: !Ref Environment
         ENABLE_DETAILED_LOGGING: 'true'
         SESSION_TIMEOUT_MINUTES: '30'
@@ -24,9 +23,10 @@ Globals:
     Tracing: Active
     # ── P1-6: VPC Isolation for all Lambda functions ──
     # Restricts internet egress directly, forcing traffic through a NAT Gateway or VPC Endpoints
-    VpcConfig:
-      SecurityGroupIds: !Ref LambdaSecurityGroupIds
-      SubnetIds: !Ref LambdaSubnetIds
+    # VPC is OPTIONAL - Uncomment below if you have VPC configured
+    # VpcConfig:
+    #   SecurityGroupIds: !Ref LambdaSecurityGroupIds
+    #   SubnetIds: !Ref LambdaSubnetIds
     Architectures:
       - arm64
 
@@ -67,14 +67,17 @@ Parameters:
     Default: asha-triage-storage
     Description: S3 bucket for voice recordings and documents
 
-  # P1-6: VPC Parameters
-  LambdaSecurityGroupIds:
-    Type: CommaDelimitedList
-    Description: List of Security Group IDs for Lambda functions
-  
-  LambdaSubnetIds:
-    Type: CommaDelimitedList
-    Description: List of Subnet IDs for Lambda functions
+  # VPC Parameters (OPTIONAL - only needed if using VPC isolation)
+  # Uncomment if you want to deploy Lambda functions in a VPC
+  # LambdaSecurityGroupIds:
+  #   Type: CommaDelimitedList
+  #   Description: List of Security Group IDs for Lambda functions
+  #   Default: ""
+  # 
+  # LambdaSubnetIds:
+  #   Type: CommaDelimitedList
+  #   Description: List of Subnet IDs for Lambda functions
+  #   Default: ""
 
 Resources:
   # ── P1-5: Medical Audio Lifecycle & Encryption ──
@@ -115,21 +118,8 @@ Resources:
       MethodSettings:
         - ResourcePath: '/*'
           HttpMethod: '*'
-          LoggingLevel: INFO
-          DataTraceEnabled: true
+          DataTraceEnabled: false
           MetricsEnabled: true
-          ThrottlingBurstLimit: 200
-          ThrottlingRateLimit: 100
-        - ResourcePath: '~1triage'
-          HttpMethod: 'POST'
-          ThrottlingBurstLimit: 1000
-          ThrottlingRateLimit: 500
-        - ResourcePath: '~1emergency~1cases'
-          HttpMethod: 'GET'
-          ThrottlingBurstLimit: 1000
-          ThrottlingRateLimit: 500
-        - ResourcePath: '~1emergency~1accept'
-          HttpMethod: 'POST'
           ThrottlingBurstLimit: 1000
           ThrottlingRateLimit: 500
 
@@ -557,9 +547,11 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref EmergencyTable
-        - SNSPublishMessagePolicy:
-            TopicArn: !Ref EscalationSNSTopic
         - Statement:
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref EscalationSNSTopic
             - Effect: Allow
               Action:
                 - ssm:GetParameter

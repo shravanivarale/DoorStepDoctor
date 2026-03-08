@@ -72,9 +72,33 @@ export declare class DynamoDBService {
      */
     updateEmergencyStatus(emergencyId: string, status: 'pending' | 'acknowledged' | 'resolved'): Promise<void>;
     /**
+     * ── P0-5: Query emergency cases with pending_ack notification status ──
+     * Used by the EscalationCheckerFunction to find unacknowledged emergencies.
+     *
+     * @param maxAgeMinutes - Only return cases older than this many minutes
+     * @returns Array of unacknowledged emergency cases
+     */
+    queryPendingEmergencies(maxAgeMinutes?: number): Promise<any[]>;
+    /**
+     * ── P0-5: Update notification status on an emergency case ──
+     * Used by the EscalationCheckerFunction and the /emergency/accept endpoint.
+     *
+     * @param emergencyId - Emergency case ID
+     * @param notificationStatus - New notification status
+     */
+    updateNotificationStatus(emergencyId: string, notificationStatus: 'pending_ack' | 'acknowledged' | 'escalated'): Promise<void>;
+    /**
      * Helper: Reconstruct TriageResult from DynamoDB item
      */
     private reconstructTriageResult;
+    /**
+     * ── P2-6: Retrieve semantic cache response ──
+     */
+    getCachedResponse(cacheKey: string): Promise<any | null>;
+    /**
+     * ── P2-6: Store semantic cache response ──
+     */
+    setCachedResponse(cacheKey: string, response: any, ttlSeconds?: number): Promise<void>;
     /**
      * Helper: Chunk array into smaller batches
      */

@@ -12,8 +12,20 @@ interface AuthContextType {
   user: UserSession | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
+  signup: (userData: SignupData) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
+}
+
+interface SignupData {
+  username: string;
+  email: string;
+  password: string;
+  fullName: string;
+  phoneNumber: string;
+  location: string;
+  registrationId: string;
+  userType: 'asha' | 'phc';
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -63,6 +75,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const signup = async (userData: SignupData) => {
+    try {
+      await apiService.signup(userData);
+      // After successful signup, user needs to verify email before login
+    } catch (error) {
+      console.error('Signup failed:', error);
+      throw error;
+    }
+  };
+
   const logout = () => {
     apiService.logout();
     setUser(null);
@@ -72,6 +94,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     user,
     loading,
     login,
+    signup,
     logout,
     isAuthenticated: !!user,
   };

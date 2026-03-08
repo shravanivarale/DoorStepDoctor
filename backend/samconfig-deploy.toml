@@ -1,0 +1,17 @@
+version = 0.1
+
+[default]
+[default.global.parameters]
+stack_name = "asha-triage-dev"
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = false
+resolve_s3 = true
+s3_prefix = "asha-triage"
+region = "ap-south-1"
+parameter_overrides = "Environment=development BedrockModelId=amazon.nova-lite-v1:0 BedrockKnowledgeBaseId=9ZTWEHQUBR BedrockGuardrailId=uqsjdrk2hsbb CognitoUserPoolId=ap-south-1_ajBNkM3s5 CognitoClientId=4lr9hop3bcar8csf05o8nd50mu S3BucketName=asha-triage-storage-shravani"

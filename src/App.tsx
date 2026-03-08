@@ -8,6 +8,7 @@ import ConsultationRoom from './components/consultation/ConsultationRoom';
 import VoiceInterface from './components/ai-assistant/VoiceInterface';
 import PharmacyFinder from './components/pharmacy/PharmacyFinder';
 import LoginForm from './components/auth/LoginForm';
+import SignupForm from './components/auth/SignupForm';
 import LowBandwidthDetector from './components/low-bandwidth/LowBandwidthDetector';
 import ImprovedTriageForm from './components/asha/ImprovedTriageForm';
 import CaseHistory from './components/asha/CaseHistory';
@@ -73,6 +74,10 @@ const AppContent: React.FC = () => {
             <Route 
               path="/login" 
               element={user ? <Navigate to="/" /> : <LoginForm />} 
+            />
+            <Route 
+              path="/signup" 
+              element={user ? <Navigate to="/" /> : <SignupForm />} 
             />
             <Route 
               path="/triage" 

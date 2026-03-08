@@ -23,6 +23,7 @@ export declare const config: {
         userTable: string;
         analyticsTable: string;
         emergencyTable: string;
+        phcDirectoryTable: string;
     };
     cognito: {
         userPoolId: string;
@@ -68,6 +69,7 @@ export declare const config: {
         phcNotificationEnabled: boolean;
         emergencyContactNumber: string;
         autoEscalationThreshold: number;
+        escalationSnsTopicArn: string;
     };
 };
 /**

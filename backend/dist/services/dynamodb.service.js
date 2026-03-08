@@ -155,6 +155,9 @@ class DynamoDBService {
                 referralNote: escalation.referralNote,
                 timestamp: escalation.timestamp,
                 notificationSent: escalation.notificationSent,
+                // ── P0-5: Notification tracking fields ──
+                notificationStatus: escalation.notificationStatus || 'pending_ack',
+                notifiedAt: escalation.notifiedAt || new Date().toISOString(),
                 status: 'pending',
                 // TTL: 180 days for emergency records
                 ttl: Math.floor(Date.now() / 1000) + (180 * 24 * 60 * 60)
@@ -334,6 +337,71 @@ class DynamoDBService {
         }
     }
     /**
+     * ── P0-5: Query emergency cases with pending_ack notification status ──
+     * Used by the EscalationCheckerFunction to find unacknowledged emergencies.
+     *
+     * @param maxAgeMinutes - Only return cases older than this many minutes
+     * @returns Array of unacknowledged emergency cases
+     */
+    async queryPendingEmergencies(maxAgeMinutes = 5) {
+        try {
+            const cutoffTime = new Date(Date.now() - maxAgeMinutes * 60 * 1000).toISOString();
+            // Scan with filter for notificationStatus = pending_ack AND notifiedAt < cutoff
+            // In production with high volume, consider a GSI on notificationStatus + notifiedAt
+            const command = new client_dynamodb_1.ScanCommand({
+                TableName: aws_config_1.default.dynamodb.emergencyTable,
+                FilterExpression: 'notificationStatus = :status AND notifiedAt < :cutoff',
+                ExpressionAttributeValues: (0, util_dynamodb_1.marshall)({
+                    ':status': 'pending_ack',
+                    ':cutoff': cutoffTime
+                })
+            });
+            const response = await this.client.send(command);
+            if (!response.Items || response.Items.length === 0) {
+                return [];
+            }
+            return response.Items.map(item => (0, util_dynamodb_1.unmarshall)(item));
+        }
+        catch (error) {
+            logger_1.default.error('Failed to query pending emergencies', error);
+            throw new errors_1.DatabaseError('query_pending_emergencies', {
+                error: error.message
+            });
+        }
+    }
+    /**
+     * ── P0-5: Update notification status on an emergency case ──
+     * Used by the EscalationCheckerFunction and the /emergency/accept endpoint.
+     *
+     * @param emergencyId - Emergency case ID
+     * @param notificationStatus - New notification status
+     */
+    async updateNotificationStatus(emergencyId, notificationStatus) {
+        try {
+            const command = new client_dynamodb_1.UpdateItemCommand({
+                TableName: aws_config_1.default.dynamodb.emergencyTable,
+                Key: (0, util_dynamodb_1.marshall)({ emergencyId }),
+                UpdateExpression: 'SET notificationStatus = :notifStatus, updatedAt = :updatedAt',
+                ExpressionAttributeValues: (0, util_dynamodb_1.marshall)({
+                    ':notifStatus': notificationStatus,
+                    ':updatedAt': new Date().toISOString()
+                })
+            });
+            await this.client.send(command);
+            logger_1.default.info('Notification status updated', { emergencyId, notificationStatus });
+        }
+        catch (error) {
+            logger_1.default.error('Failed to update notification status', error, {
+                emergencyId,
+                notificationStatus
+            });
+            throw new errors_1.DatabaseError('update_notification_status', {
+                emergencyId,
+                error: error.message
+            });
+        }
+    }
+    /**
      * Helper: Reconstruct TriageResult from DynamoDB item
      */
     reconstructTriageResult(item) {
@@ -366,6 +434,50 @@ class DynamoDBService {
                 timestamp: item.timestamp
             }
         };
+    }
+    /**
+     * ── P2-6: Retrieve semantic cache response ──
+     */
+    async getCachedResponse(cacheKey) {
+        try {
+            const command = new client_dynamodb_1.GetItemCommand({
+                TableName: 'asha-response-cache',
+                Key: (0, util_dynamodb_1.marshall)({ cacheKey })
+            });
+            const response = await this.client.send(command);
+            if (!response.Item)
+                return null;
+            const item = (0, util_dynamodb_1.unmarshall)(response.Item);
+            // Check if expired
+            if (item.expiresAt < Math.floor(Date.now() / 1000)) {
+                return null;
+            }
+            return item.response;
+        }
+        catch (error) {
+            logger_1.default.warn('P2-6: Failed to retrieve cache', { cacheKey, error: error.message });
+            return null;
+        }
+    }
+    /**
+     * ── P2-6: Store semantic cache response ──
+     */
+    async setCachedResponse(cacheKey, response, ttlSeconds = 6 * 60 * 60) {
+        try {
+            const item = {
+                cacheKey,
+                response,
+                expiresAt: Math.floor(Date.now() / 1000) + ttlSeconds
+            };
+            const command = new client_dynamodb_1.PutItemCommand({
+                TableName: 'asha-response-cache',
+                Item: (0, util_dynamodb_1.marshall)(item, { removeUndefinedValues: true })
+            });
+            await this.client.send(command);
+        }
+        catch (error) {
+            logger_1.default.warn('P2-6: Failed to store cache', { cacheKey, error: error.message });
+        }
     }
     /**
      * Helper: Chunk array into smaller batches

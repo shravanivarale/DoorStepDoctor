@@ -9,8 +9,9 @@ import { SupportedLanguage, VoiceProcessingResult } from '../types/triage.types'
  * Voice Service Class
  */
 export declare class VoiceService {
-    private transcribeClient;
+    private transcribeStreamingClient;
     private pollyClient;
+    private cwClient;
     constructor();
     /**
      * Convert speech to text using Amazon Transcribe
@@ -19,11 +20,7 @@ export declare class VoiceService {
      * @param language - Target language code
      * @returns Transcription result
      */
-    speechToText(audioS3Uri: string, language?: SupportedLanguage): Promise<VoiceProcessingResult>;
-    /**
-     * Poll transcription job until complete
-     */
-    private pollTranscriptionJob;
+    speechToText(audioBuffer: Buffer, language?: SupportedLanguage): Promise<VoiceProcessingResult>;
     /**
      * Convert text to speech using Amazon Polly
      *
@@ -36,11 +33,6 @@ export declare class VoiceService {
      * Helper: Convert readable stream to buffer
      */
     private streamToBuffer;
-    /**
-     * Detect language from audio (simplified version)
-     * In production, use Transcribe's automatic language detection
-     */
-    detectLanguage(audioS3Uri: string): Promise<SupportedLanguage>;
 }
 /**
  * Export singleton instance

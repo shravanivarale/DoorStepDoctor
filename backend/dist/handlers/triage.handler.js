@@ -12,8 +12,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.handler = handler;
 const uuid_1 = require("uuid");
 const bedrock_service_1 = __importDefault(require("../services/bedrock.service"));
+const emergency_service_1 = __importDefault(require("../services/emergency.service"));
 const dynamodb_service_1 = __importDefault(require("../services/dynamodb.service"));
 const logger_1 = __importDefault(require("../utils/logger"));
+const sanitise_1 = require("../utils/sanitise");
+const auth_validator_1 = require("../utils/auth-validator");
 const errors_1 = require("../utils/errors");
 const triage_types_1 = require("../types/triage.types");
 /**
@@ -33,12 +36,16 @@ async function handler(event, context) {
             path: event.path,
             method: event.httpMethod
         });
+        // ── P1-2: Independent JWT validation (defence-in-depth) ──
+        await (0, auth_validator_1.validateToken)(event);
         // Parse and validate request body
         if (!event.body) {
             throw new errors_1.ValidationError('Request body is required');
         }
         const requestBody = JSON.parse(event.body);
         const triageRequest = triage_types_1.TriageRequestSchema.parse(requestBody);
+        // ── P1-1: Sanitise symptom input against prompt injection ──
+        triageRequest.symptoms = (0, sanitise_1.sanitiseSymptomInput)(triageRequest.symptoms);
         logger_1.default.info('Triage request validated', {
             userId: triageRequest.userId,
             language: triageRequest.language,
@@ -46,6 +53,8 @@ async function handler(event, context) {
         });
         // Perform triage using Bedrock RAG pipeline
         const { response, ragContext, processingTimeMs } = await bedrock_service_1.default.performTriage(triageRequest);
+        // ── P0-3: Apply composite risk score with emergency keyword safety net ──
+        emergency_service_1.default.applyCompositeRiskScore(response, triageRequest.symptoms);
         // Create triage result
         const triageResult = {
             triageId: (0, uuid_1.v4)(),
@@ -74,14 +83,22 @@ async function handler(event, context) {
             anonymized: true
         };
         await dynamodb_service_1.default.storeAnalyticsEvent(analyticsEvent);
-        // Handle emergency escalation if needed
-        if (response.urgencyLevel === 'emergency') {
+        // Handle emergency escalation if needed (P0-3 may have set urgencyLevel to 'critical')
+        if (response.urgencyLevel === 'emergency' || response.urgencyLevel === 'critical') {
             logger_1.default.logEmergencyEscalation(triageResult.triageId, {
                 riskScore: response.riskScore,
                 location: triageRequest.location
             });
-            // Emergency escalation will be handled by a separate service
-            // For now, just log the event
+            // ── P0-5: Process emergency with notification tracking ──
+            try {
+                await emergency_service_1.default.processEmergency(triageResult);
+            }
+            catch (escalationError) {
+                // Emergency escalation failure must not block the triage response
+                logger_1.default.error('Emergency escalation failed but triage continues', escalationError, {
+                    triageId: triageResult.triageId
+                });
+            }
         }
         const totalProcessingTime = Date.now() - startTime;
         logger_1.default.logPerformance('triage_complete', totalProcessingTime, {

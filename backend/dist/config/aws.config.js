@@ -17,9 +17,9 @@ exports.config = {
     region: process.env.AWS_REGION || 'us-east-1',
     // Amazon Bedrock Configuration
     bedrock: {
-        modelId: process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-haiku-20240307-v1:0',
+        modelId: process.env.BEDROCK_MODEL_ID || 'amazon.nova-lite-v1:0',
         knowledgeBaseId: process.env.BEDROCK_KB_ID || '',
-        maxTokens: parseInt(process.env.BEDROCK_MAX_TOKENS || '400', 10),
+        maxTokens: parseInt(process.env.BEDROCK_MAX_TOKENS || '300', 10),
         temperature: parseFloat(process.env.BEDROCK_TEMPERATURE || '0.2'),
         topP: parseFloat(process.env.BEDROCK_TOP_P || '0.9'),
         guardrailId: process.env.BEDROCK_GUARDRAIL_ID || '',
@@ -30,7 +30,8 @@ exports.config = {
         triageTable: process.env.DYNAMODB_TRIAGE_TABLE || 'asha-triage-records',
         userTable: process.env.DYNAMODB_USER_TABLE || 'asha-users',
         analyticsTable: process.env.DYNAMODB_ANALYTICS_TABLE || 'asha-analytics',
-        emergencyTable: process.env.DYNAMODB_EMERGENCY_TABLE || 'asha-emergency-cases'
+        emergencyTable: process.env.DYNAMODB_EMERGENCY_TABLE || 'asha-emergency-cases',
+        phcDirectoryTable: process.env.DYNAMODB_PHC_DIRECTORY_TABLE || 'asha-phc-directory'
     },
     // Amazon Cognito
     cognito: {
@@ -84,7 +85,8 @@ exports.config = {
     emergency: {
         phcNotificationEnabled: process.env.PHC_NOTIFICATION_ENABLED === 'true',
         emergencyContactNumber: process.env.EMERGENCY_CONTACT_NUMBER || '108',
-        autoEscalationThreshold: parseFloat(process.env.AUTO_ESCALATION_THRESHOLD || '0.8')
+        autoEscalationThreshold: parseFloat(process.env.AUTO_ESCALATION_THRESHOLD || '0.8'),
+        escalationSnsTopicArn: process.env.ESCALATION_SNS_TOPIC_ARN || ''
     }
 };
 /**

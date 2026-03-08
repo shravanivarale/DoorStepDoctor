@@ -43,8 +43,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.voiceService = exports.VoiceService = void 0;
-const client_transcribe_1 = require("@aws-sdk/client-transcribe");
+const client_transcribe_streaming_1 = require("@aws-sdk/client-transcribe-streaming");
 const client_polly_1 = require("@aws-sdk/client-polly");
+const client_cloudwatch_1 = require("@aws-sdk/client-cloudwatch");
 const aws_config_1 = __importStar(require("../config/aws.config"));
 const logger_1 = __importDefault(require("../utils/logger"));
 const errors_1 = require("../utils/errors");
@@ -53,8 +54,9 @@ const errors_1 = require("../utils/errors");
  */
 class VoiceService {
     constructor() {
-        this.transcribeClient = new client_transcribe_1.TranscribeClient({ region: aws_config_1.default.region });
+        this.transcribeStreamingClient = new client_transcribe_streaming_1.TranscribeStreamingClient({ region: aws_config_1.default.region });
         this.pollyClient = new client_polly_1.PollyClient({ region: aws_config_1.default.region });
+        this.cwClient = new client_cloudwatch_1.CloudWatchClient({ region: aws_config_1.default.region });
     }
     /**
      * Convert speech to text using Amazon Transcribe
@@ -63,76 +65,97 @@ class VoiceService {
      * @param language - Target language code
      * @returns Transcription result
      */
-    async speechToText(audioS3Uri, language = 'hi-IN') {
+    async speechToText(audioBuffer, language = 'hi-IN') {
         const startTime = Date.now();
-        const jobName = `triage-${Date.now()}`;
         try {
-            logger_1.default.debug('Starting transcription job', { audioS3Uri, language });
-            // Start transcription job
-            const startCommand = new client_transcribe_1.StartTranscriptionJobCommand({
-                TranscriptionJobName: jobName,
-                LanguageCode: language,
-                MediaFormat: aws_config_1.default.transcribe.mediaFormat,
-                Media: {
-                    MediaFileUri: audioS3Uri
-                },
-                Settings: {
-                    ShowSpeakerLabels: false,
-                    MaxSpeakerLabels: 1
+            logger_1.default.debug('Starting stream transcription', { language });
+            const audioStream = (async function* () {
+                const chunkSize = 16 * 1024; // 16KB chunks
+                for (let i = 0; i < audioBuffer.length; i += chunkSize) {
+                    yield {
+                        AudioEvent: {
+                            AudioChunk: audioBuffer.slice(i, i + chunkSize)
+                        }
+                    };
                 }
+            })();
+            const command = new client_transcribe_streaming_1.StartStreamTranscriptionCommand({
+                LanguageCode: language,
+                MediaEncoding: 'pcm', // Default to PCM
+                MediaSampleRateHertz: 16000,
+                AudioStream: audioStream
             });
-            await this.transcribeClient.send(startCommand);
-            // Poll for completion
-            const transcription = await this.pollTranscriptionJob(jobName);
+            const response = await this.transcribeStreamingClient.send(command);
+            let finalTranscript = '';
+            let confidenceSum = 0;
+            let wordCount = 0;
+            if (response.TranscriptResultStream) {
+                for await (const event of response.TranscriptResultStream) {
+                    if (event.TranscriptEvent) {
+                        const results = event.TranscriptEvent.Transcript?.Results;
+                        if (results && results.length > 0) {
+                            const result = results[0];
+                            if (!result.IsPartial && result.Alternatives && result.Alternatives.length > 0) {
+                                const alt = result.Alternatives[0];
+                                finalTranscript += (alt.Transcript || '') + ' ';
+                                if (alt.Items) {
+                                    for (const item of alt.Items) {
+                                        if (item.Confidence != null) {
+                                            confidenceSum += item.Confidence;
+                                            wordCount++;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            const averageConfidence = wordCount > 0 ? confidenceSum / wordCount : 0;
             const processingTimeMs = Date.now() - startTime;
+            const audioLengthSeconds = audioBuffer.length / 32000;
+            let requiresConfirmation = false;
+            let message;
+            // ── P2-3: Voice STT Language Validation ──
+            if (averageConfidence > 0 && averageConfidence < 0.75) {
+                requiresConfirmation = true;
+                message = "Could not clearly hear. Please confirm or re-record.";
+                // Note: Bengali, Kannada, and Telugu have known accuracy limitations in rural dialects.
+                // Run quarterly benchmarks against a labelled audio corpus.
+                try {
+                    await this.cwClient.send(new client_cloudwatch_1.PutMetricDataCommand({
+                        Namespace: 'ASHA-Triage',
+                        MetricData: [{
+                                MetricName: 'stt_low_confidence_count',
+                                Value: 1,
+                                Unit: 'Count',
+                                Dimensions: [{ Name: 'LanguageCode', Value: language }]
+                            }]
+                    }));
+                }
+                catch (e) {
+                    logger_1.default.error('Failed to emit stt_low_confidence_count metric', e);
+                }
+            }
             logger_1.default.info('Transcription completed', {
-                jobName,
                 language,
-                processingTimeMs
+                processingTimeMs,
+                averageConfidence
             });
             return {
-                transcription: transcription.text,
-                confidence: transcription.confidence,
+                transcription: finalTranscript.trim() || 'No speech detected',
+                confidence: averageConfidence,
                 detectedLanguage: language,
                 processingTimeMs,
-                audioLengthSeconds: transcription.duration
+                audioLengthSeconds,
+                requiresConfirmation,
+                message
             };
         }
         catch (error) {
-            logger_1.default.error('Transcription failed', error, { audioS3Uri, language });
-            throw new errors_1.VoiceProcessingError('speech_to_text', { audioS3Uri, language, error: error.message });
+            logger_1.default.error('Transcription failed', error, { language });
+            throw new errors_1.VoiceProcessingError('speech_to_text', { language, error: error.message });
         }
-    }
-    /**
-     * Poll transcription job until complete
-     */
-    async pollTranscriptionJob(jobName, maxAttempts = 30) {
-        for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            const getCommand = new client_transcribe_1.GetTranscriptionJobCommand({
-                TranscriptionJobName: jobName
-            });
-            const response = await this.transcribeClient.send(getCommand);
-            const job = response.TranscriptionJob;
-            if (job?.TranscriptionJobStatus === 'COMPLETED') {
-                // Fetch transcript from S3 URI
-                const transcriptUri = job.Transcript?.TranscriptFileUri;
-                if (!transcriptUri) {
-                    throw new Error('Transcript URI not found');
-                }
-                // In production, fetch from S3. For now, return placeholder
-                return {
-                    text: 'Transcribed text placeholder',
-                    confidence: 0.95,
-                    duration: 10
-                };
-            }
-            if (job?.TranscriptionJobStatus === 'FAILED') {
-                throw new Error(`Transcription job failed: ${job.FailureReason}`);
-            }
-            // Wait before next poll
-            await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-        throw new Error('Transcription job timeout');
     }
     /**
      * Convert text to speech using Amazon Polly
@@ -183,16 +206,6 @@ class VoiceService {
             chunks.push(chunk);
         }
         return Buffer.concat(chunks);
-    }
-    /**
-     * Detect language from audio (simplified version)
-     * In production, use Transcribe's automatic language detection
-     */
-    async detectLanguage(audioS3Uri) {
-        // Placeholder implementation
-        // In production, use Transcribe with IdentifyLanguage option
-        logger_1.default.debug('Language detection requested', { audioS3Uri });
-        return 'hi-IN';
     }
 }
 exports.VoiceService = VoiceService;

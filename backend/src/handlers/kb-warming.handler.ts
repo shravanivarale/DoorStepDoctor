@@ -25,7 +25,7 @@ async function emitMetric(metricName: string, value: number) {
     }
 }
 
-export const handler = async (event: any): Promise<void> => {
+export const handler = async (_event: any): Promise<void> => {
     console.log('Starting KB warm ping execution');
 
     try {

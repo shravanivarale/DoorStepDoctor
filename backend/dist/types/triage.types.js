@@ -32,7 +32,7 @@ exports.TriageRequestSchema = zod_1.z.object({
  * Structured JSON output from Claude 3 Haiku via Bedrock
  */
 exports.TriageResponseSchema = zod_1.z.object({
-    urgencyLevel: zod_1.z.enum(['low', 'medium', 'high', 'emergency']),
+    urgencyLevel: zod_1.z.enum(['low', 'medium', 'high', 'emergency', 'escalate', 'critical']),
     riskScore: zod_1.z.number().min(0).max(1),
     recommendedAction: zod_1.z.string(),
     referToPhc: zod_1.z.boolean(),
