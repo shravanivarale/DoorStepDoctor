@@ -3,7 +3,6 @@ import { User, Lock, Mail, Phone, MapPin, UserCheck, Stethoscope, Heart, ArrowLe
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/LanguageContext';
-import LanguageSwitcher from '../common/LanguageSwitcher';
 
 const SignupForm: React.FC = () => {
   const { signup } = useAuth();
@@ -151,11 +150,6 @@ const SignupForm: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-green-50 to-blue-50">
-      {/* Language Switcher - Fixed Position */}
-      <div className="fixed top-4 right-4 z-50">
-        <LanguageSwitcher />
-      </div>
-
       <div className="max-w-2xl w-full">
         <div className="card">
           {/* Back Button */}

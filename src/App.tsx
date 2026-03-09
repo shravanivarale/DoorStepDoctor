@@ -27,36 +27,40 @@ const AppContent: React.FC = () => {
       <div className="App">
         <LowBandwidthDetector onModeChange={setLowBandwidthMode} />
         
-        {/* Navigation */}
-        <nav className="navbar">
-          <div className="navbar-content">
-            <div className="logo">
-              <Heart size={24} />
-              <span>{t('app.title')}</span>
-            </div>
-            <div className="flex items-center gap-4">
-              <ul className="nav-links">
-                {user && user.role === 'asha_worker' && (
-                  <>
-                    <li><Link to="/triage">{t('nav.triage')}</Link></li>
-                    <li><Link to="/history">{t('nav.history')}</Link></li>
-                  </>
-                )}
-                {user && user.role === 'phc_doctor' && (
-                  <li><Link to="/emergency-queue">{t('nav.emergency')}</Link></li>
-                )}
-                {user && (
+        {/* Global Language Switcher - Always visible in top-right */}
+        <div className="fixed top-4 right-4 z-50">
+          <LanguageSwitcher />
+        </div>
+        
+        {/* Navigation - Only show when user is logged in */}
+        {user && (
+          <nav className="navbar">
+            <div className="navbar-content">
+              <div className="logo">
+                <Heart size={24} />
+                <span>{t('app.title')}</span>
+              </div>
+              <div className="flex items-center gap-4">
+                <ul className="nav-links">
+                  {user.role === 'asha_worker' && (
+                    <>
+                      <li><Link to="/triage">{t('nav.triage')}</Link></li>
+                      <li><Link to="/history">{t('nav.history')}</Link></li>
+                    </>
+                  )}
+                  {user.role === 'phc_doctor' && (
+                    <li><Link to="/emergency-queue">{t('nav.emergency')}</Link></li>
+                  )}
                   <li>
                     <button onClick={logout} className="button secondary">
                       {t('nav.logout')} ({user.name})
                     </button>
                   </li>
-                )}
-              </ul>
-              <LanguageSwitcher />
+                </ul>
+              </div>
             </div>
-          </div>
-        </nav>
+          </nav>
+        )}
 
         {/* Main Content */}
         <div className="container">

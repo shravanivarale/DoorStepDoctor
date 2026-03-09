@@ -3,9 +3,9 @@ import { User, Lock, UserCheck, Stethoscope, Heart } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/LanguageContext';
-import LanguageSwitcher from '../common/LanguageSwitcher';
 
 const LoginForm: React.FC = () => {
+  console.log('🔥 LoginForm UPDATED VERSION - No duplicate buttons!');
   const { login } = useAuth();
   const navigate = useNavigate();
   const { t } = useLanguage();
@@ -59,11 +59,6 @@ const LoginForm: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-green-50 to-blue-50">
-      {/* Language Switcher - Fixed Position */}
-      <div className="fixed top-4 right-4 z-50">
-        <LanguageSwitcher />
-      </div>
-
       <div className="max-w-md w-full">
         <div className="card">
           {/* Logo and Title */}
