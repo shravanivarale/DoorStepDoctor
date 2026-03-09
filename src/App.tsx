@@ -32,6 +32,11 @@ const AppContent: React.FC = () => {
           <LanguageSwitcher />
         </div>
         
+        {/* Debug: Show current language */}
+        <div className="fixed top-4 left-4 bg-white px-3 py-1 rounded shadow text-xs">
+          Current: {t('app.title')}
+        </div>
+        
         {/* Navigation - Only show when user is logged in */}
         {user && (
           <nav className="navbar">
