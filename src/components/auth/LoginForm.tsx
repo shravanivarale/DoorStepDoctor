@@ -31,7 +31,7 @@ const LoginForm: React.FC = () => {
       await login(formData.username, formData.password);
       
       // Success message
-      alert('✅ Login successful! Redirecting to dashboard...');
+      alert(t('login.successMessage'));
       
       // Navigate to appropriate dashboard
       navigate(userType === 'asha' ? '/triage' : '/emergency-queue');
@@ -39,22 +39,16 @@ const LoginForm: React.FC = () => {
       console.error('Login failed:', error);
       
       // User-friendly error messages
-      let errorMessage = 'Login failed. ';
+      let errorMessage = t('login.errorGeneric');
       
       if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
-        errorMessage = '⚠️ Backend server is not available.\n\n' +
-                      'This is expected if you haven\'t deployed the backend yet.\n\n' +
-                      'To fix this:\n' +
-                      '1. Deploy backend using AWS SAM\n' +
-                      '2. Add API Gateway endpoint to .env.local\n' +
-                      '3. Restart the app\n\n' +
-                      'See AWS_SETUP_INSTRUCTIONS.md for details.';
+        errorMessage = t('login.errorNetwork');
       } else if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
-        errorMessage = '❌ Invalid username or password.\n\nPlease check your credentials and try again.';
+        errorMessage = t('login.errorInvalidCredentials');
       } else if (error.message?.includes('User does not exist')) {
-        errorMessage = '❌ User not found.\n\nPlease sign up first or check your username.';
+        errorMessage = t('login.errorUserNotFound');
       } else {
-        errorMessage = `❌ ${error.message || 'An unexpected error occurred. Please try again.'}`;
+        errorMessage = `${t('login.errorGeneric')} ${error.message || ''}`;
       }
       
       alert(errorMessage);
@@ -195,34 +189,18 @@ const LoginForm: React.FC = () => {
             </p>
           </div>
 
-          {/* Demo Login */}
+          {/* Demo Credentials Info */}
           <div className="mt-6 pt-6 border-t border-gray-200">
-            <p className="text-center text-sm text-gray-600 mb-3">
-              {t('login.demoAccess')}
+            <p className="text-center text-sm font-semibold text-gray-700 mb-2">
+              {t('login.demoCredentials')}
             </p>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => {
-                  setFormData({ username: 'asha_worker_001', password: 'demo123' });
-                  setUserType('asha');
-                }}
-                className="button secondary flex items-center justify-center gap-2 text-sm py-3"
-                disabled={isLoading}
-              >
-                <UserCheck size={16} />
-                {t('login.asha')}
-              </button>
-              <button
-                onClick={() => {
-                  setFormData({ username: 'phc_doctor_001', password: 'demo123' });
-                  setUserType('phc');
-                }}
-                className="button secondary flex items-center justify-center gap-2 text-sm py-3"
-                disabled={isLoading}
-              >
-                <Stethoscope size={16} />
-                {t('login.phc')}
-              </button>
+            <div className="text-xs text-gray-600 space-y-1">
+              <p className="text-center">
+                <span className="font-medium">{t('login.asha')}:</span> asha_worker_001 / demo123
+              </p>
+              <p className="text-center">
+                <span className="font-medium">{t('login.phc')}:</span> phc_doctor_001 / demo123
+              </p>
             </div>
           </div>
 
