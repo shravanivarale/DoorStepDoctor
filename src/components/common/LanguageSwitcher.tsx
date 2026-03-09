@@ -54,9 +54,11 @@ const LanguageSwitcher: React.FC = () => {
               onClick={() => handleLanguageChange(lang.code)}
               className={`language-option ${language === lang.code ? 'active' : ''}`}
             >
-              <div>
-                <div className="font-medium">{lang.nativeName}</div>
-                <div className="text-xs text-gray-500">{lang.name}</div>
+              <div style={{ fontWeight: 600, color: '#2e7d32', marginBottom: '2px', fontSize: '14px' }}>
+                {lang.nativeName}
+              </div>
+              <div style={{ fontSize: '11px', color: '#666' }}>
+                {lang.name}
               </div>
             </div>
           ))}

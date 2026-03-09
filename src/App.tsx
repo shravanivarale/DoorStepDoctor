@@ -28,7 +28,7 @@ const AppContent: React.FC = () => {
         <LowBandwidthDetector onModeChange={setLowBandwidthMode} />
         
         {/* Global Language Switcher - Always visible in top-right */}
-        <div className="fixed top-4 right-4 z-50">
+        <div style={{ position: 'fixed', top: '1rem', right: '1rem', zIndex: 9999 }}>
           <LanguageSwitcher />
         </div>
         
