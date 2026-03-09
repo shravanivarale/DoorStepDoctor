@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/LanguageContext';
 
 const LoginForm: React.FC = () => {
-  console.log('🔥 LoginForm UPDATED VERSION - No duplicate buttons!');
   const { login } = useAuth();
   const navigate = useNavigate();
   const { t } = useLanguage();
