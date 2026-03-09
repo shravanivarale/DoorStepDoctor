@@ -3,6 +3,7 @@ import { User, Lock, UserCheck, Stethoscope, Heart } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/LanguageContext';
+import LanguageSwitcher from '../common/LanguageSwitcher';
 
 const LoginForm: React.FC = () => {
   const { login } = useAuth();
@@ -64,6 +65,11 @@ const LoginForm: React.FC = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-green-50 to-blue-50">
+      {/* Language Switcher - Fixed Position */}
+      <div className="fixed top-4 right-4 z-50">
+        <LanguageSwitcher />
+      </div>
+
       <div className="max-w-md w-full">
         <div className="card">
           {/* Logo and Title */}
@@ -84,7 +90,7 @@ const LoginForm: React.FC = () => {
           {/* User Type Selection */}
           <div className="mb-6">
             <label className="block text-sm font-medium mb-3 text-gray-700 text-center">
-              {t('login.selectRole') || 'Select Your Role'}
+              {t('login.selectRole')}
             </label>
             <div className="grid grid-cols-2 gap-3">
               <button
@@ -131,7 +137,7 @@ const LoginForm: React.FC = () => {
                   name="username"
                   value={formData.username}
                   onChange={handleInputChange}
-                  placeholder={t('login.usernamePlaceholder') || 'Enter username'}
+                  placeholder={t('login.usernamePlaceholder')}
                   className="input pl-10"
                   required
                   autoComplete="username"
@@ -151,7 +157,7 @@ const LoginForm: React.FC = () => {
                   name="password"
                   value={formData.password}
                   onChange={handleInputChange}
-                  placeholder={t('login.passwordPlaceholder') || 'Enter password'}
+                  placeholder={t('login.passwordPlaceholder')}
                   className="input pl-10"
                   required
                   autoComplete="current-password"
@@ -168,7 +174,7 @@ const LoginForm: React.FC = () => {
               {isLoading ? (
                 <span className="flex items-center justify-center">
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                  {t('login.processing') || 'Processing...'}
+                  {t('login.processing')}
                 </span>
               ) : (
                 t('login.signin')
@@ -179,12 +185,12 @@ const LoginForm: React.FC = () => {
           {/* Sign Up Link */}
           <div className="mt-6 text-center">
             <p className="text-gray-600">
-              Don't have an account?{' '}
+              {t('login.noAccount')}{' '}
               <button
                 onClick={() => navigate('/signup')}
                 className="text-green-600 hover:text-green-700 font-semibold transition-colors"
               >
-                Sign Up
+                {t('login.signupLink')}
               </button>
             </p>
           </div>
@@ -192,7 +198,7 @@ const LoginForm: React.FC = () => {
           {/* Demo Login */}
           <div className="mt-6 pt-6 border-t border-gray-200">
             <p className="text-center text-sm text-gray-600 mb-3">
-              {t('login.demoAccess') || 'Quick Demo Access:'}
+              {t('login.demoAccess')}
             </p>
             <div className="grid grid-cols-2 gap-3">
               <button
@@ -226,10 +232,10 @@ const LoginForm: React.FC = () => {
               <UserCheck className="text-green-600 mt-1 flex-shrink-0" size={20} />
               <div>
                 <h3 className="font-semibold text-green-800 text-sm mb-1">
-                  {t('login.secureTitle') || 'Secure & Private'}
+                  {t('login.secureTitle')}
                 </h3>
                 <p className="text-green-700 text-xs leading-relaxed">
-                  {t('login.secureDesc') || 'Your data is protected with end-to-end encryption and complies with DPDP Act 2023.'}
+                  {t('login.secureDesc')}
                 </p>
               </div>
             </div>
