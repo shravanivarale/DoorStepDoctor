@@ -246,8 +246,10 @@ body {
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  min-width: 180px;
-  z-index: 1000;
+  min-width: 200px;
+  z-index: 10000;
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .language-option {
@@ -255,6 +257,7 @@ body {
   cursor: pointer;
   transition: background 0.2s ease;
   border-bottom: 1px solid #f5f5f5;
+  color: #333;
 }
 
 .language-option:last-child {
@@ -267,6 +270,22 @@ body {
 
 .language-option.active {
   background: #e8f5e9;
+  color: #2e7d32;
+  font-weight: 600;
+}
+
+.language-option .font-medium {
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 2px;
+}
+
+.language-option .text-xs {
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.language-option.active .font-medium {
   color: #2e7d32;
   font-weight: 600;
 }
