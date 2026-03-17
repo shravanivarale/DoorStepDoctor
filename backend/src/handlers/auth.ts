@@ -19,6 +19,11 @@ export async function loginHandler(
   event: APIGatewayProxyEvent,
   context: Context
 ): Promise<APIGatewayProxyResult> {
+  // Handle CORS preflight requests
+  if (event.httpMethod === 'OPTIONS') {
+    return optionsHandler(event, context);
+  }
+
   const requestId = context.awsRequestId;
   logger.setContext({ requestId, handler: 'login' });
   
@@ -74,6 +79,11 @@ export async function registerHandler(
   event: APIGatewayProxyEvent,
   context: Context
 ): Promise<APIGatewayProxyResult> {
+  // Handle CORS preflight requests
+  if (event.httpMethod === 'OPTIONS') {
+    return optionsHandler(event, context);
+  }
+
   const requestId = context.awsRequestId;
   logger.setContext({ requestId, handler: 'register' });
   
@@ -135,6 +145,11 @@ export async function validateTokenHandler(
   event: APIGatewayProxyEvent,
   context: Context
 ): Promise<APIGatewayProxyResult> {
+  // Handle CORS preflight requests
+  if (event.httpMethod === 'OPTIONS') {
+    return optionsHandler(event, context);
+  }
+
   const requestId = context.awsRequestId;
   logger.setContext({ requestId, handler: 'validateToken' });
   
@@ -180,6 +195,11 @@ export async function confirmRegistrationHandler(
   event: APIGatewayProxyEvent,
   context: Context
 ): Promise<APIGatewayProxyResult> {
+  // Handle CORS preflight requests
+  if (event.httpMethod === 'OPTIONS') {
+    return optionsHandler(event, context);
+  }
+
   const requestId = context.awsRequestId;
   logger.setContext({ requestId, handler: 'confirmRegistration' });
   
@@ -263,5 +283,26 @@ function handleAuthError(error: Error, requestId: string): APIGatewayProxyResult
       'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
     },
     body: JSON.stringify(response)
+  };
+}
+
+/**
+ * Handle CORS preflight OPTIONS request
+ */
+export async function optionsHandler(
+  event: APIGatewayProxyEvent,
+  context: Context
+): Promise<APIGatewayProxyResult> {
+  return {
+    statusCode: 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token',
+      'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+      'Access-Control-Allow-Credentials': 'true',
+      'Access-Control-Max-Age': '600'
+    },
+    body: ''
   };
 }
