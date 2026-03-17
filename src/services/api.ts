@@ -7,7 +7,30 @@
 import { TriageRequest, TriageResult, UserSession } from './types';
 
 // API Configuration
-const API_BASE_URL = process.env.REACT_APP_API_ENDPOINT || 'http://localhost:3000';
+// Determine the API endpoint based on environment
+const getAPIEndpoint = (): string => {
+  // Try to use environment variable first
+  if (process.env.REACT_APP_API_ENDPOINT) {
+    return process.env.REACT_APP_API_ENDPOINT;
+  }
+
+  // For development, use localhost
+  if (process.env.NODE_ENV === 'development') {
+    console.warn(
+      'REACT_APP_API_ENDPOINT not set. Using localhost:3000. ' +
+      'For production, set REACT_APP_API_ENDPOINT environment variable.'
+    );
+    return 'http://localhost:3000';
+  }
+
+  // For production, throw error to prevent invalid requests
+  throw new Error(
+    'REACT_APP_API_ENDPOINT environment variable is not configured. ' +
+    'Please set it in your deployment platform settings.'
+  );
+};
+
+const API_BASE_URL = getAPIEndpoint();
 
 class APIService {
   private token: string | null = null;
@@ -71,7 +94,27 @@ class APIService {
 
       return data.data;
     } catch (error) {
-      console.error('API Error:', error);
+      // Better error logging for debugging
+      const isConnectionError = 
+        (error instanceof TypeError && 
+          (error.message.includes('Failed to fetch') || 
+           error.message.includes('NetworkError'))) ||
+        (error instanceof Error && 
+          error.message.includes('ERR_CONNECTION_REFUSED'));
+
+      if (isConnectionError) {
+        console.error(
+          `🔴 CONNECTION ERROR: Cannot reach API at ${url}\n` +
+          `Please ensure:\n` +
+          `1. Backend API is running and accessible\n` +
+          `2. REACT_APP_API_ENDPOINT is correctly set to the backend URL\n` +
+          `3. For Vercel deployment, set environment variables in Vercel project settings\n` +
+          `4. Not using .env.local on production (it's not deployed)\n` +
+          `\nCurrent API Endpoint: ${API_BASE_URL}`
+        );
+      } else {
+        console.error('API Error:', error);
+      }
       throw error;
     }
   }

@@ -35,21 +35,21 @@ Object.defineProperty(exports, "emergencyService", { enumerable: true, get: func
 var auth_service_1 = require("./services/auth.service");
 Object.defineProperty(exports, "authService", { enumerable: true, get: function () { return auth_service_1.authService; } });
 // Handlers
-var triage_handler_1 = require("./handlers/triage.handler");
-Object.defineProperty(exports, "triageHandler", { enumerable: true, get: function () { return triage_handler_1.handler; } });
-var auth_handler_1 = require("./handlers/auth.handler");
-Object.defineProperty(exports, "loginHandler", { enumerable: true, get: function () { return auth_handler_1.loginHandler; } });
-Object.defineProperty(exports, "registerHandler", { enumerable: true, get: function () { return auth_handler_1.registerHandler; } });
-Object.defineProperty(exports, "validateTokenHandler", { enumerable: true, get: function () { return auth_handler_1.validateTokenHandler; } });
-Object.defineProperty(exports, "confirmRegistrationHandler", { enumerable: true, get: function () { return auth_handler_1.confirmRegistrationHandler; } });
-var voice_handler_1 = require("./handlers/voice.handler");
-Object.defineProperty(exports, "speechToTextHandler", { enumerable: true, get: function () { return voice_handler_1.speechToTextHandler; } });
-Object.defineProperty(exports, "textToSpeechHandler", { enumerable: true, get: function () { return voice_handler_1.textToSpeechHandler; } });
-Object.defineProperty(exports, "detectLanguageHandler", { enumerable: true, get: function () { return voice_handler_1.detectLanguageHandler; } });
-var emergency_handler_1 = require("./handlers/emergency.handler");
-Object.defineProperty(exports, "getEmergencyCasesHandler", { enumerable: true, get: function () { return emergency_handler_1.getEmergencyCasesHandler; } });
-Object.defineProperty(exports, "updateEmergencyStatusHandler", { enumerable: true, get: function () { return emergency_handler_1.updateEmergencyStatusHandler; } });
-Object.defineProperty(exports, "getEmergencyContactHandler", { enumerable: true, get: function () { return emergency_handler_1.getEmergencyContactHandler; } });
+var triage_1 = require("./handlers/triage");
+Object.defineProperty(exports, "triageHandler", { enumerable: true, get: function () { return triage_1.handler; } });
+var auth_1 = require("./handlers/auth");
+Object.defineProperty(exports, "loginHandler", { enumerable: true, get: function () { return auth_1.loginHandler; } });
+Object.defineProperty(exports, "registerHandler", { enumerable: true, get: function () { return auth_1.registerHandler; } });
+Object.defineProperty(exports, "validateTokenHandler", { enumerable: true, get: function () { return auth_1.validateTokenHandler; } });
+Object.defineProperty(exports, "confirmRegistrationHandler", { enumerable: true, get: function () { return auth_1.confirmRegistrationHandler; } });
+var voice_1 = require("./handlers/voice");
+Object.defineProperty(exports, "speechToTextHandler", { enumerable: true, get: function () { return voice_1.speechToTextHandler; } });
+Object.defineProperty(exports, "textToSpeechHandler", { enumerable: true, get: function () { return voice_1.textToSpeechHandler; } });
+Object.defineProperty(exports, "detectLanguageHandler", { enumerable: true, get: function () { return voice_1.detectLanguageHandler; } });
+var emergency_1 = require("./handlers/emergency");
+Object.defineProperty(exports, "getEmergencyCasesHandler", { enumerable: true, get: function () { return emergency_1.getEmergencyCasesHandler; } });
+Object.defineProperty(exports, "updateEmergencyStatusHandler", { enumerable: true, get: function () { return emergency_1.updateEmergencyStatusHandler; } });
+Object.defineProperty(exports, "getEmergencyContactHandler", { enumerable: true, get: function () { return emergency_1.getEmergencyContactHandler; } });
 // Configuration
 var aws_config_1 = require("./config/aws.config");
 Object.defineProperty(exports, "config", { enumerable: true, get: function () { return __importDefault(aws_config_1).default; } });

@@ -1,15 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
-import { Heart, Users, MessageCircle, Pill, Brain, Shield } from 'lucide-react';
+import { Heart } from 'lucide-react';
 
 // Import components
-import ThreeJSHealthDashboard from './components/dashboard/ThreeJSHealthDashboard';
-import ConsultationRoom from './components/consultation/ConsultationRoom';
-import VoiceInterface from './components/ai-assistant/VoiceInterface';
-import PharmacyFinder from './components/pharmacy/PharmacyFinder';
 import LoginForm from './components/auth/LoginForm';
 import SignupForm from './components/auth/SignupForm';
-import LowBandwidthDetector from './components/low-bandwidth/LowBandwidthDetector';
 import ImprovedTriageForm from './components/asha/ImprovedTriageForm';
 import CaseHistory from './components/asha/CaseHistory';
 import EmergencyQueue from './components/phc/EmergencyQueue';
@@ -20,13 +15,15 @@ import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 const AppContent: React.FC = () => {
   const { user, logout } = useAuth();
   const { t } = useLanguage();
-  const [lowBandwidthMode, setLowBandwidthMode] = useState(false);
 
   return (
-    <Router>
+    <Router
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <div className="App">
-        <LowBandwidthDetector onModeChange={setLowBandwidthMode} />
-        
         {/* Global Language Switcher - Always visible in top-right */}
         <div style={{ position: 'fixed', top: '1rem', right: '1rem', zIndex: 9999 }}>
           <LanguageSwitcher />

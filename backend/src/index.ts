@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Main Entry Point
  * 
  * Exports all services, handlers, and utilities for the AI Triage Engine.
@@ -12,23 +12,23 @@ export { emergencyService } from './services/emergency.service';
 export { authService } from './services/auth.service';
 
 // Handlers
-export { handler as triageHandler } from './handlers/triage.handler';
+export { handler as triageHandler } from './handlers/triage';
 export {
   loginHandler,
   registerHandler,
   validateTokenHandler,
   confirmRegistrationHandler
-} from './handlers/auth.handler';
+} from './handlers/auth';
 export {
   speechToTextHandler,
   textToSpeechHandler,
   detectLanguageHandler
-} from './handlers/voice.handler';
+} from './handlers/voice';
 export {
   getEmergencyCasesHandler,
   updateEmergencyStatusHandler,
   getEmergencyContactHandler
-} from './handlers/emergency.handler';
+} from './handlers/emergency';
 
 // Configuration
 export { default as config } from './config/aws.config';

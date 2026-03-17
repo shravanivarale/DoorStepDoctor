@@ -107,8 +107,9 @@ Resources:
       StageName: !Ref Environment
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        AllowHeaders: "'Content-Type,Authorization'"
+        AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
         AllowOrigin: "'*'"
+        MaxAge: "'600'"
       Auth:
         DefaultAuthorizer: CognitoAuthorizer
         Authorizers:
@@ -122,6 +123,19 @@ Resources:
           MetricsEnabled: true
           ThrottlingBurstLimit: 1000
           ThrottlingRateLimit: 500
+      GatewayResponses:
+        DEFAULT_4XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        DEFAULT_5XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
 
   # DynamoDB Tables
   TriageTable:
@@ -326,7 +340,7 @@ Resources:
     Properties:
       FunctionName: !Sub ${AWS::StackName}-triage
       CodeUri: ./dist
-      Handler: handlers/triage.handler.handler
+      Handler: handlers/triage.handler
       Description: Main triage processing function
       MemorySize: 384
       Environment:
@@ -373,7 +387,7 @@ Resources:
     Properties:
       FunctionName: !Sub ${AWS::StackName}-login
       CodeUri: ./dist
-      Handler: handlers/auth.handler.loginHandler
+      Handler: handlers/auth.loginHandler
       Description: User login function
       MemorySize: 128
       Environment:
@@ -402,7 +416,7 @@ Resources:
     Properties:
       FunctionName: !Sub ${AWS::StackName}-register
       CodeUri: ./dist
-      Handler: handlers/auth.handler.registerHandler
+      Handler: handlers/auth.registerHandler
       Description: User registration function
       MemorySize: 128
       Environment:
@@ -430,7 +444,7 @@ Resources:
     Properties:
       FunctionName: !Sub ${AWS::StackName}-voice-stt
       CodeUri: ./dist
-      Handler: handlers/voice.handler.speechToTextHandler
+      Handler: handlers/voice.speechToTextHandler
       Description: Speech-to-text function
       MemorySize: 256
       Timeout: 60
@@ -463,7 +477,7 @@ Resources:
     Properties:
       FunctionName: !Sub ${AWS::StackName}-voice-tts
       CodeUri: ./dist
-      Handler: handlers/voice.handler.textToSpeechHandler
+      Handler: handlers/voice.textToSpeechHandler
       Description: Text-to-speech function
       MemorySize: 256
       Environment:
@@ -490,7 +504,7 @@ Resources:
     Properties:
       FunctionName: !Sub ${AWS::StackName}-emergency
       CodeUri: ./dist
-      Handler: handlers/emergency.handler.getEmergencyCasesHandler
+      Handler: handlers/emergency.getEmergencyCasesHandler
       Description: Emergency case management function
       MemorySize: 256
       Environment:
@@ -513,7 +527,7 @@ Resources:
     Properties:
       FunctionName: !Sub ${AWS::StackName}-emergency-accept
       CodeUri: ./dist
-      Handler: handlers/emergency.handler.updateEmergencyStatusHandler
+      Handler: handlers/emergency.updateEmergencyStatusHandler
       Description: Emergency case acceptance and status update function
       MemorySize: 128
       Environment:
@@ -536,7 +550,7 @@ Resources:
     Properties:
       FunctionName: !Sub ${AWS::StackName}-escalation-checker
       CodeUri: ./dist
-      Handler: handlers/escalation-checker.handler.handler
+      Handler: handlers/escalation-checker.handler
       Description: Checks for unacknowledged emergency cases and escalates via SMS
       MemorySize: 128
       Timeout: 60
@@ -577,7 +591,7 @@ Resources:
     Properties:
       FunctionName: !Sub ${AWS::StackName}-kb-warming
       CodeUri: ./dist
-      Handler: handlers/kb-warming.handler.handler
+      Handler: handlers/kb-warming.handler
       Description: Scheduled function to prevent OpenSearch cold starts
       MemorySize: 128
       Timeout: 30

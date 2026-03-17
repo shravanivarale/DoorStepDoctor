@@ -41,7 +41,9 @@ const LoginForm: React.FC = () => {
       let errorMessage = t('login.errorGeneric');
       
       if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
-        errorMessage = t('login.errorNetwork');
+        errorMessage = t('login.errorNetwork') + 
+          '\n\nTechnical Details: Cannot connect to the backend API. ' +
+          'If you deployed to Vercel, make sure REACT_APP_API_ENDPOINT is set in Vercel project environment variables.';
       } else if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
         errorMessage = t('login.errorInvalidCredentials');
       } else if (error.message?.includes('User does not exist')) {
